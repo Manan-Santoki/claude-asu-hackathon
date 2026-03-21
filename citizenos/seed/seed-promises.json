@@ -1,1 +1,274 @@
-[]
+[
+  {
+    "member_id": "S001217",
+    "name": "Sen. Elizabeth Warren",
+    "promises": [
+      {
+        "promise_text": "Cancel up to $50,000 in student loan debt for borrowers earning under $125,000",
+        "category": "education",
+        "source_url": "https://elizabethwarren.com/plans/student-loan-debt",
+        "status": "in_progress",
+        "evidence": "Introduced S.910 (Student Loan Relief Act) in the 119th Congress. Bill is in committee."
+      },
+      {
+        "promise_text": "Implement a 2% wealth tax on fortunes over $50 million",
+        "category": "tax",
+        "source_url": "https://elizabethwarren.com/plans/ultra-millionaire-tax",
+        "status": "not_yet_addressed",
+        "evidence": "No wealth tax legislation introduced in the 119th Congress so far."
+      },
+      {
+        "promise_text": "Break up big tech companies like Amazon, Google, and Facebook",
+        "category": "technology",
+        "source_url": "https://elizabethwarren.com/plans/break-up-big-tech",
+        "status": "in_progress",
+        "evidence": "Co-sponsored the AI Accountability Act (S.555) which creates FTC oversight. Partial progress toward tech regulation."
+      },
+      {
+        "promise_text": "Pass universal childcare for families earning up to 200% of poverty level",
+        "category": "family",
+        "source_url": "https://elizabethwarren.com/plans/universal-child-care",
+        "status": "in_progress",
+        "evidence": "Co-sponsored the Childcare for Working Families Act (HR.4321). Bill introduced but in committee."
+      }
+    ]
+  },
+  {
+    "member_id": "C001098",
+    "name": "Sen. Ted Cruz",
+    "promises": [
+      {
+        "promise_text": "Secure the southern border and finish the border wall",
+        "category": "immigration",
+        "source_url": "https://www.tedcruz.org/issues/border-security/",
+        "status": "in_progress",
+        "evidence": "Voted Yes on the Secure Border Act (HR.5678). Bill passed Senate committee."
+      },
+      {
+        "promise_text": "Protect Second Amendment rights and oppose any new gun restrictions",
+        "category": "gun_policy",
+        "source_url": "https://www.tedcruz.org/issues/second-amendment/",
+        "status": "kept",
+        "evidence": "Voted Yes on the Community Safety Act (S.1776) which preempts state assault weapon bans while strengthening background checks. Consistent opposition to gun control amendments."
+      },
+      {
+        "promise_text": "Cut taxes for working families and simplify the tax code",
+        "category": "tax",
+        "source_url": "https://www.tedcruz.org/issues/jobs-and-opportunity/",
+        "status": "kept",
+        "evidence": "Voted Yes on the Small Biz Tax Relief Act (S.2222) which makes QBI deduction permanent and simplifies small business filing."
+      },
+      {
+        "promise_text": "Repeal the Affordable Care Act and replace with market-based solutions",
+        "category": "healthcare",
+        "source_url": "https://www.tedcruz.org/issues/healthcare/",
+        "status": "broken",
+        "evidence": "No ACA repeal legislation introduced in the 119th Congress. Voted against the Affordable Insulin Now Act which could have been an alternative market approach."
+      },
+      {
+        "promise_text": "Oppose government regulation of artificial intelligence",
+        "category": "technology",
+        "source_url": "https://www.cruz.senate.gov/newsroom/press-releases/",
+        "status": "kept",
+        "evidence": "Voted No on the AI Accountability Act (S.555), opposing new federal AI regulations."
+      }
+    ]
+  },
+  {
+    "member_id": "S001191",
+    "name": "Sen. Kyrsten Sinema",
+    "promises": [
+      {
+        "promise_text": "Work across party lines to deliver bipartisan solutions",
+        "category": "government_spending",
+        "source_url": "https://www.sinema.senate.gov/about",
+        "status": "kept",
+        "evidence": "Co-sponsored bipartisan bills including the Community Safety Act (62-38 vote) and Small Biz Tax Relief Act (71-29 vote). One of the most bipartisan voting records in the Senate."
+      },
+      {
+        "promise_text": "Lower prescription drug costs for Arizona families",
+        "category": "healthcare",
+        "source_url": "https://www.sinema.senate.gov/priorities",
+        "status": "kept",
+        "evidence": "Voted Yes on the Affordable Insulin Now Act. Previously helped pass the Inflation Reduction Act's Medicare drug negotiation provisions."
+      },
+      {
+        "promise_text": "Invest in Arizona's border communities and comprehensive immigration reform",
+        "category": "immigration",
+        "source_url": "https://www.sinema.senate.gov/priorities",
+        "status": "in_progress",
+        "evidence": "Supported elements of the Secure Border Act but pushed for amendments adding a pathway for DACA recipients. Negotiations ongoing."
+      }
+    ]
+  },
+  {
+    "member_id": "G000574",
+    "name": "Rep. Ruben Gallego",
+    "promises": [
+      {
+        "promise_text": "Expand veterans' mental health services and reduce veteran suicide",
+        "category": "veterans",
+        "source_url": "https://gallego.house.gov/issues/veterans",
+        "status": "kept",
+        "evidence": "Voted Yes on the Veterans Mental Health Act (HR.7890), which was signed into law. Bill expands VA mental health services by $3.1B."
+      },
+      {
+        "promise_text": "Cap insulin costs at $35 per month for all Americans",
+        "category": "healthcare",
+        "source_url": "https://gallego.house.gov/issues/healthcare",
+        "status": "in_progress",
+        "evidence": "Voted Yes on the Affordable Insulin Now Act (HR.1234). Bill passed the House 232-193 and is now in Senate committee."
+      },
+      {
+        "promise_text": "Invest in clean energy jobs for Arizona communities",
+        "category": "climate",
+        "source_url": "https://gallego.house.gov/issues/environment",
+        "status": "in_progress",
+        "evidence": "Co-sponsored the Clean Energy Jobs Act (HR.3456). Bill is in committee, specifically targets Arizona with Navajo County solar transition funding."
+      },
+      {
+        "promise_text": "Make housing affordable for working families in Arizona",
+        "category": "housing",
+        "source_url": "https://gallego.house.gov/issues/housing",
+        "status": "in_progress",
+        "evidence": "Co-sponsored the Housing Affordability Act (HR.9999). Bill would eliminate Maricopa County's Section 8 waitlist within 5 years."
+      }
+    ]
+  },
+  {
+    "member_id": "S001183",
+    "name": "Rep. David Schweikert",
+    "promises": [
+      {
+        "promise_text": "Reduce government spending and balance the federal budget",
+        "category": "government_spending",
+        "source_url": "https://schweikert.house.gov/issues",
+        "status": "in_progress",
+        "evidence": "Voted against several spending bills. Supported the Small Biz Tax Relief Act as a revenue-neutral alternative. No balanced budget amendment introduced."
+      },
+      {
+        "promise_text": "Lower taxes for Arizona families and small businesses",
+        "category": "tax",
+        "source_url": "https://schweikert.house.gov/issues/tax-reform",
+        "status": "kept",
+        "evidence": "Voted Yes on the Small Biz Tax Relief Act. Advocated for permanent extension of individual tax cuts."
+      },
+      {
+        "promise_text": "Support innovation and oppose heavy-handed tech regulation",
+        "category": "technology",
+        "source_url": "https://schweikert.house.gov/issues/technology",
+        "status": "kept",
+        "evidence": "Voted against the AI Accountability Act, arguing it would stifle innovation. Supports voluntary industry standards over federal mandates."
+      },
+      {
+        "promise_text": "Strengthen border security and enforce immigration laws",
+        "category": "immigration",
+        "source_url": "https://schweikert.house.gov/issues/immigration",
+        "status": "in_progress",
+        "evidence": "Voted Yes on the Secure Border Act (HR.5678). Bill passed House committee, awaiting full floor vote."
+      }
+    ]
+  },
+  {
+    "member_id": "K000377",
+    "name": "Sen. Mark Kelly",
+    "promises": [
+      {
+        "promise_text": "Lower prescription drug costs and protect healthcare coverage",
+        "category": "healthcare",
+        "source_url": "https://www.markkelly.com/issues/healthcare",
+        "status": "kept",
+        "evidence": "Voted Yes on the Affordable Insulin Now Act. Previously helped pass the Inflation Reduction Act's drug price negotiation provisions."
+      },
+      {
+        "promise_text": "Secure Arizona's border with smart technology and more agents",
+        "category": "immigration",
+        "source_url": "https://www.markkelly.com/issues/border-security",
+        "status": "in_progress",
+        "evidence": "Supported border security funding in the Secure Border Act but pushed for technology-focused amendments over physical barriers. Negotiations ongoing."
+      },
+      {
+        "promise_text": "Support veterans and expand access to VA services",
+        "category": "veterans",
+        "source_url": "https://www.markkelly.com/issues/veterans",
+        "status": "kept",
+        "evidence": "Voted Yes on the Veterans Mental Health Act (HR.7890). Bill was signed into law, expanding VA mental health services."
+      },
+      {
+        "promise_text": "Invest in clean water infrastructure for Arizona",
+        "category": "climate",
+        "source_url": "https://www.markkelly.com/issues/water",
+        "status": "not_yet_addressed",
+        "evidence": "No specific clean water infrastructure bill introduced in the 119th Congress. Issue remains a priority per office communications."
+      },
+      {
+        "promise_text": "Make housing more affordable for Arizona families",
+        "category": "housing",
+        "source_url": "https://www.markkelly.com/issues/housing",
+        "status": "in_progress",
+        "evidence": "Co-sponsored companion measures to the Housing Affordability Act. Full bill is in committee."
+      }
+    ]
+  },
+  {
+    "member_id": "B001302",
+    "name": "Rep. Andy Biggs",
+    "promises": [
+      {
+        "promise_text": "Secure the border and end illegal immigration",
+        "category": "immigration",
+        "source_url": "https://biggs.house.gov/issues/immigration",
+        "status": "kept",
+        "evidence": "Voted Yes on the Secure Border Act (HR.5678). Sponsored additional amendments to strengthen enforcement provisions."
+      },
+      {
+        "promise_text": "Cut federal spending and reduce the national debt",
+        "category": "government_spending",
+        "source_url": "https://biggs.house.gov/issues/spending",
+        "status": "in_progress",
+        "evidence": "Voted against several appropriations bills deemed too costly. Proposed spending reduction amendments, some adopted."
+      },
+      {
+        "promise_text": "Protect gun rights and oppose red flag laws",
+        "category": "gun_policy",
+        "source_url": "https://biggs.house.gov/issues/second-amendment",
+        "status": "broken",
+        "evidence": "The Community Safety Act (S.1776) which he voted for includes a federal crisis intervention framework (red flag law), contradicting his promise to oppose all red flag provisions."
+      },
+      {
+        "promise_text": "Oppose all new federal climate regulations and mandates",
+        "category": "climate",
+        "source_url": "https://biggs.house.gov/issues/energy",
+        "status": "kept",
+        "evidence": "Voted No on the Clean Energy Jobs Act (HR.3456). Consistently opposed all climate-related spending bills."
+      }
+    ]
+  },
+  {
+    "member_id": "S001211",
+    "name": "Rep. Greg Stanton",
+    "promises": [
+      {
+        "promise_text": "Make childcare affordable for working families",
+        "category": "family",
+        "source_url": "https://stanton.house.gov/issues/families",
+        "status": "in_progress",
+        "evidence": "Co-sponsored the Childcare for Working Families Act (HR.4321). Bill is in committee."
+      },
+      {
+        "promise_text": "Invest in Arizona infrastructure and clean energy jobs",
+        "category": "climate",
+        "source_url": "https://stanton.house.gov/issues/infrastructure",
+        "status": "in_progress",
+        "evidence": "Voted Yes on the Clean Energy Jobs Act (HR.3456). Actively advocating for Arizona-specific provisions."
+      },
+      {
+        "promise_text": "Lower healthcare costs for Arizona families",
+        "category": "healthcare",
+        "source_url": "https://stanton.house.gov/issues/healthcare",
+        "status": "kept",
+        "evidence": "Voted Yes on the Affordable Insulin Now Act (HR.1234). Bill passed the House with his support."
+      }
+    ]
+  }
+]

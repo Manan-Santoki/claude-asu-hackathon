@@ -113,25 +113,25 @@ export default function BillDetailPage() {
           {/* Persona impact section */}
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold">How does this affect you?</h2>
-            <PersonaSelector billId={selectedBill.id} />
+            <PersonaSelector />
             <ImpactPanel />
           </div>
 
           {/* Impact story */}
-          <ImpactStory billId={selectedBill.id} />
+          <ImpactStory />
 
           <Separator />
 
           {/* Chat */}
-          <BillChat billId={selectedBill.id} />
+          <BillChat />
 
           <Separator />
 
           {/* Reps who voted */}
-          <RepsVoted billId={selectedBill.id} />
+          <RepsVoted />
 
           {/* Action bar */}
-          <BillActionBar billId={selectedBill.id} />
+          <BillActionBar />
         </div>
       )}
     </PageWrapper>

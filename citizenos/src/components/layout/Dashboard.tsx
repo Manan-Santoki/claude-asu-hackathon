@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
-import { FileText, Users, ClipboardList } from 'lucide-react'
+import { FileText, Users, ClipboardList, Zap } from 'lucide-react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import PageWrapper from '@/components/layout/PageWrapper'
+import RepList from '@/components/repscore/RepList'
+import ActionFeed from '@/components/actions/ActionFeed'
 
 const quickLinks = [
   {
@@ -11,6 +13,12 @@ const quickLinks = [
     icon: FileText,
     title: 'Saved Bills',
     description: 'Review bills you bookmarked',
+  },
+  {
+    to: '/actions',
+    icon: Zap,
+    title: 'Gov Actions',
+    description: 'Track orders, rules & rulings',
   },
   {
     to: '/reps',
@@ -56,6 +64,29 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Actions feed */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Government Actions For You</h2>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/actions">View All</Link>
+          </Button>
+        </div>
+        <ActionFeed limit={4} compact />
+      </div>
+
+      {user?.state_code && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Your Representatives</h2>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/reps">View All</Link>
+            </Button>
+          </div>
+          <RepList stateFilter={user.state_code} compact />
+        </div>
+      )}
     </PageWrapper>
   )
 }

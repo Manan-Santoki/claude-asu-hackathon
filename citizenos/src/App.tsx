@@ -9,31 +9,16 @@ import { useAuthStore } from '@/stores/useAuthStore'
 // Lazy-loaded route components
 const MapView = React.lazy(() => import('@/components/map/USAMap'))
 const BillDetailPage = React.lazy(() => import('@/components/billbreaker/BillDetailPage'))
+const RepScoreDashboard = React.lazy(() => import('@/components/repscore/RepScoreDashboard'))
+const RepDetailPage = React.lazy(() => import('@/components/repscore/RepDetailPage'))
 const Dashboard = React.lazy(() => import('@/components/layout/Dashboard'))
 const LoginForm = React.lazy(() => import('@/components/auth/LoginForm'))
 const SignupForm = React.lazy(() => import('@/components/auth/SignupForm'))
 const OnboardingFlow = React.lazy(() => import('@/components/auth/OnboardingFlow'))
 const VoteMapPage = React.lazy(() => import('@/components/votemap/VoteMapPage'))
 const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateDetail'))
-
-// Simple placeholder pages
-function RepScoreDashboard() {
-  return (
-    <PageWrapper>
-      <h1 className="text-2xl font-bold tracking-tight mb-2">RepScore Dashboard</h1>
-      <p className="text-muted-foreground">Representative scorecards coming soon.</p>
-    </PageWrapper>
-  )
-}
-
-function RepDetail() {
-  return (
-    <PageWrapper>
-      <h1 className="text-2xl font-bold tracking-tight mb-2">Rep Detail</h1>
-      <p className="text-muted-foreground">Individual representative detail page coming soon.</p>
-    </PageWrapper>
-  )
-}
+const ActionSearchPage = React.lazy(() => import('@/components/actions/ActionSearchPage'))
+const ActionDetailPage = React.lazy(() => import('@/components/actions/ActionDetailPage'))
 
 function SettingsPage() {
   return (
@@ -78,9 +63,11 @@ export default function App() {
         <Route path="/" element={<MapView />} />
         <Route path="/bill/:id" element={<BillDetailPage />} />
         <Route path="/reps" element={<RepScoreDashboard />} />
-        <Route path="/rep/:memberId" element={<RepDetail />} />
+        <Route path="/rep/:memberId" element={<RepDetailPage />} />
         <Route path="/vote" element={<VoteMapPage />} />
         <Route path="/candidate/:id" element={<CandidateDetail />} />
+        <Route path="/actions" element={<ActionSearchPage />} />
+        <Route path="/action/:id" element={<ActionDetailPage />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/login" element={<LoginForm />} />

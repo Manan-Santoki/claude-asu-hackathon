@@ -25,6 +25,7 @@ const navItems = [
   { to: '/', label: 'Map' },
   { to: '/bill/latest', label: 'BillBreaker' },
   { to: '/reps', label: 'RepScore' },
+  { to: '/actions', label: 'Actions' },
   { to: '/vote', label: 'VoteMap' },
 ]
 
