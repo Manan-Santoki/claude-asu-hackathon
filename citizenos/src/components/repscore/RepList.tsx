@@ -1,3 +1,67 @@
-// PERSON B — RepScore
-// Rep grid with filters (state, chamber, sort by score)
-// Used in: StatePanel Reps tab + /reps route
+import { useEffect, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import RepCard from './RepCard'
+import { useRepStore } from '@/stores/useRepStore'
+import { getRepScore } from '@/api/reps'
+import type { RepScores } from '@/api/reps'
+
+interface RepListProps {
+  stateFilter?: string
+  compact?: boolean
+}
+
+export default function RepList({ stateFilter, compact }: RepListProps) {
+  const { reps, isLoading, fetchReps } = useRepStore()
+  const [scores, setScores] = useState<Record<string, RepScores>>({})
+
+  useEffect(() => {
+    fetchReps({ state: stateFilter })
+  }, [stateFilter, fetchReps])
+
+  // Fetch scores for all reps
+  useEffect(() => {
+    if (reps.length === 0) return
+    const fetchScores = async () => {
+      const results: Record<string, RepScores> = {}
+      await Promise.all(
+        reps.map(async (rep) => {
+          const score = await getRepScore(rep.member_id)
+          results[rep.member_id] = score
+        })
+      )
+      setScores(results)
+    }
+    fetchScores()
+  }, [reps])
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-20 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (reps.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-8">
+        No representatives found.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {reps.map((rep) => (
+        <RepCard
+          key={rep.id}
+          rep={rep}
+          score={scores[rep.member_id]?.overall_accountability_score}
+          compact={compact}
+        />
+      ))}
+    </div>
+  )
+}

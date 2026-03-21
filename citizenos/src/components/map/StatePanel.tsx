@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator'
 import { useMapStore } from '@/stores/useMapStore'
 import { getStateByCode } from '@/lib/states'
 import BillList from '@/components/billbreaker/BillList'
+import RepList from '@/components/repscore/RepList'
+import ActionFeed from '@/components/actions/ActionFeed'
 import CandidateList from '@/components/votemap/CandidateList'
 
 export default function StatePanel() {
@@ -41,7 +43,8 @@ export default function StatePanel() {
           <Tabs defaultValue="bills">
             <TabsList className="w-full">
               <TabsTrigger value="bills">Bills</TabsTrigger>
-              <TabsTrigger value="reps">Representatives</TabsTrigger>
+              <TabsTrigger value="actions">Actions</TabsTrigger>
+              <TabsTrigger value="reps">Reps</TabsTrigger>
               <TabsTrigger value="candidates">Candidates</TabsTrigger>
               <TabsTrigger value="stats">Stats</TabsTrigger>
             </TabsList>
@@ -50,10 +53,12 @@ export default function StatePanel() {
               {selectedState && <BillList stateFilter={selectedState} />}
             </TabsContent>
 
+            <TabsContent value="actions" className="mt-4">
+              {selectedState && <ActionFeed stateFilter={selectedState} compact limit={5} />}
+            </TabsContent>
+
             <TabsContent value="reps" className="mt-4">
-              <p className="text-sm text-muted-foreground">
-                Representatives data coming soon.
-              </p>
+              {selectedState && <RepList stateFilter={selectedState} compact />}
             </TabsContent>
 
             <TabsContent value="candidates" className="mt-4">
