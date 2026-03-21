@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { useMapStore } from '@/stores/useMapStore'
 import { getStateByCode } from '@/lib/states'
 import BillList from '@/components/billbreaker/BillList'
+import CandidateList from '@/components/votemap/CandidateList'
 
 export default function StatePanel() {
   const selectedState = useMapStore((s) => s.selectedState)
@@ -56,9 +57,7 @@ export default function StatePanel() {
             </TabsContent>
 
             <TabsContent value="candidates" className="mt-4">
-              <p className="text-sm text-muted-foreground">
-                Candidate information coming soon.
-              </p>
+              {selectedState && <CandidateList stateFilter={selectedState} />}
             </TabsContent>
 
             <TabsContent value="stats" className="mt-4">

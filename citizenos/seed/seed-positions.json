@@ -1,1 +1,194 @@
-[]
+[
+  {
+    "candidate_id": "cand-001",
+    "candidate_name": "Maria Santos",
+    "positions": {
+      "immigration": { "score": 1, "summary": "Supports pathway to citizenship for DACA recipients and comprehensive reform with border security funding" },
+      "healthcare": { "score": 2, "summary": "Expanded Medicaid as governor; supports public option alongside private insurance" },
+      "economy": { "score": 1, "summary": "Favors targeted corporate regulation, especially in tech and pharma, while supporting small business tax breaks" },
+      "education": { "score": 1, "summary": "Supports increased federal funding for public schools and community colleges, but not full free tuition" },
+      "climate": { "score": 2, "summary": "Aggressive clean energy targets; led Arizona's transition to 50% renewable by 2030" },
+      "gun_policy": { "score": 1, "summary": "Supports universal background checks and red flag laws while respecting Second Amendment rights" },
+      "criminal_justice": { "score": 1, "summary": "Supports sentencing reform and increased police accountability measures" },
+      "foreign_policy": { "score": 1, "summary": "Internationalist approach favoring strong alliances and multilateral diplomacy" },
+      "social_issues": { "score": 2, "summary": "Strong advocate for LGBTQ+ protections and the Equality Act" },
+      "gov_spending": { "score": -1, "summary": "Willing to increase deficit spending for infrastructure and healthcare investments" }
+    }
+  },
+  {
+    "candidate_id": "cand-002",
+    "candidate_name": "James Crawford",
+    "positions": {
+      "immigration": { "score": -1, "summary": "Prioritizes border security and enforcement; supports legal immigration reform but opposes amnesty" },
+      "healthcare": { "score": -1, "summary": "Opposes government-run healthcare; supports market-based solutions and health savings accounts" },
+      "economy": { "score": -2, "summary": "Strong deregulation advocate; wants to cut corporate taxes to boost competitiveness" },
+      "education": { "score": -1, "summary": "Supports school choice and voucher programs; opposes federal education mandates" },
+      "climate": { "score": -1, "summary": "Supports all-of-the-above energy strategy including fossil fuels; skeptical of Green New Deal" },
+      "gun_policy": { "score": -2, "summary": "Strong Second Amendment defender; opposes new gun restrictions and supports concealed carry reciprocity" },
+      "criminal_justice": { "score": -1, "summary": "Tough-on-crime stance with support for law enforcement funding; cautious on reform" },
+      "foreign_policy": { "score": 1, "summary": "Strong military advocate; supports robust defense spending and NATO commitments" },
+      "social_issues": { "score": -1, "summary": "Supports religious liberty protections; opposes federal mandates on social policy" },
+      "gov_spending": { "score": 2, "summary": "Committed to balanced budget; wants to cut non-defense discretionary spending 20%" }
+    }
+  },
+  {
+    "candidate_id": "cand-003",
+    "candidate_name": "Priya Sharma",
+    "positions": {
+      "immigration": { "score": 2, "summary": "Supports comprehensive immigration reform with path to citizenship and increased H-1B visas for tech workers" },
+      "healthcare": { "score": 2, "summary": "Supports Medicare for All with a transition period; authored prescription drug pricing legislation" },
+      "economy": { "score": 2, "summary": "Advocates for breaking up tech monopolies and strengthening worker protections in the gig economy" },
+      "education": { "score": 2, "summary": "Champions free public college and student debt cancellation up to $50,000" },
+      "climate": { "score": 2, "summary": "Green New Deal co-sponsor; built a clean energy company; wants net-zero by 2040" },
+      "gun_policy": { "score": 2, "summary": "Supports assault weapons ban, universal background checks, and federal red flag law" },
+      "criminal_justice": { "score": 2, "summary": "Supports ending cash bail, decriminalizing marijuana, and redirecting police funding to social services" },
+      "foreign_policy": { "score": 1, "summary": "Multilateral approach with focus on tech diplomacy and cyber defense over military intervention" },
+      "social_issues": { "score": 2, "summary": "Authored federal LGBTQ+ anti-discrimination legislation; supports expanding civil rights protections" },
+      "gov_spending": { "score": -2, "summary": "Supports major new spending programs funded by wealth tax and corporate tax increases" }
+    }
+  },
+  {
+    "candidate_id": "cand-004",
+    "candidate_name": "Robert Mitchell",
+    "positions": {
+      "immigration": { "score": 0, "summary": "Moderate stance: supports border security with a pragmatic path for long-term residents" },
+      "healthcare": { "score": -1, "summary": "Prefers private-sector solutions; supports ACA reforms but opposes single-payer" },
+      "economy": { "score": -1, "summary": "Pro-manufacturing tariffs; supports tax incentives for reshoring jobs to Ohio" },
+      "education": { "score": 0, "summary": "Supports vocational training expansion; mixed on federal higher education spending" },
+      "climate": { "score": 0, "summary": "Acknowledges climate change; supports gradual transition balancing jobs and environment" },
+      "gun_policy": { "score": -1, "summary": "Generally pro-gun rights; open to background check improvements" },
+      "criminal_justice": { "score": 0, "summary": "Supported bipartisan First Step Act; balances reform with law enforcement support" },
+      "foreign_policy": { "score": 1, "summary": "Hawks on China trade policy; strong NATO supporter" },
+      "social_issues": { "score": 0, "summary": "Libertarian-leaning: personally conservative but opposes federal social mandates" },
+      "gov_spending": { "score": 1, "summary": "Fiscally conservative but willing to spend on infrastructure and manufacturing incentives" }
+    }
+  },
+  {
+    "candidate_id": "cand-005",
+    "candidate_name": "Angela Washington",
+    "positions": {
+      "immigration": { "score": 1, "summary": "Supports DACA protections and humane border policy; opposes family separation" },
+      "healthcare": { "score": 2, "summary": "Advocates for public option and expansion of community health centers in rural Ohio" },
+      "economy": { "score": 1, "summary": "Supports raising minimum wage to $17 and strengthening union protections" },
+      "education": { "score": 2, "summary": "Former teacher; champions increased Title I funding and free school meals for all students" },
+      "climate": { "score": 1, "summary": "Supports clean energy transition with job retraining programs for displaced workers" },
+      "gun_policy": { "score": 1, "summary": "Supports universal background checks; advocates for school safety funding" },
+      "criminal_justice": { "score": 2, "summary": "Strong reform advocate: ending private prisons, expunging marijuana convictions, investing in reentry programs" },
+      "foreign_policy": { "score": 0, "summary": "Domestic policy focus; supports diplomacy-first approach internationally" },
+      "social_issues": { "score": 2, "summary": "Champions Equality Act and federal anti-discrimination protections" },
+      "gov_spending": { "score": -1, "summary": "Supports increased social spending funded by progressive tax reform" }
+    }
+  },
+  {
+    "candidate_id": "cand-006",
+    "candidate_name": "David Chen",
+    "positions": {
+      "immigration": { "score": 2, "summary": "Son of immigrants; supports comprehensive reform, DACA protections, and expanded refugee admissions" },
+      "healthcare": { "score": 1, "summary": "Supports public option and drug price negotiation; wants to expand community health centers" },
+      "economy": { "score": 2, "summary": "Pro-worker: supports $17 minimum wage, paid family leave, and gig worker protections" },
+      "education": { "score": 1, "summary": "Supports increased Pell grants and trade school funding; focuses on K-12 equity" },
+      "climate": { "score": 2, "summary": "Environmental justice champion; wants green infrastructure investment in low-income communities" },
+      "gun_policy": { "score": 2, "summary": "Supports assault weapons ban and community violence intervention programs" },
+      "criminal_justice": { "score": 2, "summary": "Advocates for ending cash bail, police reform, and investing in mental health crisis response" },
+      "foreign_policy": { "score": 0, "summary": "Focused on domestic policy; supports human rights-centered foreign policy" },
+      "social_issues": { "score": 2, "summary": "Strong civil rights advocate; supports federal anti-discrimination law expansion" },
+      "gov_spending": { "score": -2, "summary": "Supports ambitious social spending funded by taxing wealth over $50 million" }
+    }
+  },
+  {
+    "candidate_id": "cand-007",
+    "candidate_name": "Sarah Thornton",
+    "positions": {
+      "immigration": { "score": -1, "summary": "Prioritizes border security and visa enforcement; supports merit-based legal immigration" },
+      "healthcare": { "score": 0, "summary": "Supports ACA with cost-reduction reforms; opposes single-payer but wants lower premiums" },
+      "economy": { "score": -1, "summary": "Supports reducing business regulations and cutting red tape for small businesses" },
+      "education": { "score": 0, "summary": "Supports school choice and accountability measures; wants to reduce student loan interest rates" },
+      "climate": { "score": 0, "summary": "Supports nuclear energy and natural gas as transition fuels; pragmatic on climate" },
+      "gun_policy": { "score": -1, "summary": "Supports Second Amendment; open to strengthening existing background check enforcement" },
+      "criminal_justice": { "score": 0, "summary": "Former prosecutor who supports both law enforcement and targeted reform measures" },
+      "foreign_policy": { "score": 1, "summary": "Strong on national security; supports robust intelligence capabilities and allied partnerships" },
+      "social_issues": { "score": 0, "summary": "Moderate: supports civil unions and anti-discrimination protections but defers to states on marriage" },
+      "gov_spending": { "score": 1, "summary": "Anti-corruption focus; wants government efficiency audits and elimination of wasteful spending" }
+    }
+  },
+  {
+    "candidate_id": "cand-008",
+    "candidate_name": "Marcus Johnson",
+    "positions": {
+      "immigration": { "score": 1, "summary": "Supports comprehensive reform and protections for immigrant families; authored DREAM Act legislation" },
+      "healthcare": { "score": 2, "summary": "Supports Medicare for All; focused on eliminating racial health disparities" },
+      "economy": { "score": 1, "summary": "Supports raising corporate taxes to fund community development and job training" },
+      "education": { "score": 2, "summary": "Champions HBCUs funding, student debt relief, and universal pre-K" },
+      "climate": { "score": 1, "summary": "Supports environmental justice legislation targeting pollution in minority communities" },
+      "gun_policy": { "score": 2, "summary": "Authored community violence prevention legislation; supports comprehensive gun reform" },
+      "criminal_justice": { "score": 2, "summary": "Civil rights attorney who authored police accountability and sentencing reform bills" },
+      "foreign_policy": { "score": 0, "summary": "Focused on domestic civil rights; supports human rights-centered foreign policy" },
+      "social_issues": { "score": 2, "summary": "Voting rights champion; authored legislation to restore the Voting Rights Act" },
+      "gov_spending": { "score": -1, "summary": "Supports increased investment in communities; funded through progressive tax reform" }
+    }
+  },
+  {
+    "candidate_id": "cand-009",
+    "candidate_name": "Lisa Kowalski",
+    "positions": {
+      "immigration": { "score": -1, "summary": "Supports legal immigration reform; wants stronger border enforcement and E-Verify mandate" },
+      "healthcare": { "score": -1, "summary": "Opposes government healthcare expansion; supports health savings accounts and cross-state insurance" },
+      "economy": { "score": -2, "summary": "Small business champion; wants to eliminate regulations she sees as burdensome to entrepreneurs" },
+      "education": { "score": -1, "summary": "Supports school choice, charter schools, and parental control over curriculum" },
+      "climate": { "score": -1, "summary": "Opposes Green New Deal; supports energy independence including domestic oil and gas" },
+      "gun_policy": { "score": -2, "summary": "Strong Second Amendment advocate; NRA-endorsed; opposes assault weapons ban" },
+      "criminal_justice": { "score": -1, "summary": "Supports law enforcement; favors mandatory minimums for violent crime" },
+      "foreign_policy": { "score": 0, "summary": "America-first trade policy; skeptical of foreign aid but supports military" },
+      "social_issues": { "score": -1, "summary": "Socially conservative; supports religious liberty protections" },
+      "gov_spending": { "score": 2, "summary": "Wants balanced budget amendment; supports across-the-board spending cuts" }
+    }
+  },
+  {
+    "candidate_id": "cand-010",
+    "candidate_name": "Carlos Rivera",
+    "positions": {
+      "immigration": { "score": 2, "summary": "Border community advocate; supports earned citizenship path and humane border policy" },
+      "healthcare": { "score": 1, "summary": "Supports expanding VA healthcare and community health centers in underserved areas" },
+      "economy": { "score": 1, "summary": "Focuses on small business development in border communities and rural areas" },
+      "education": { "score": 2, "summary": "Champions bilingual education funding and teacher pay increases" },
+      "climate": { "score": 1, "summary": "Supports solar energy development in Arizona; wants green jobs in rural communities" },
+      "gun_policy": { "score": 0, "summary": "Marine veteran; supports responsible gun ownership with enhanced background checks" },
+      "criminal_justice": { "score": 1, "summary": "Supports reforms focused on reducing recidivism and expanding veteran courts" },
+      "foreign_policy": { "score": 0, "summary": "Focused on US-Mexico relations and border community diplomacy" },
+      "social_issues": { "score": 1, "summary": "Supports anti-discrimination protections and immigrant family unity" },
+      "gov_spending": { "score": 0, "summary": "Pragmatic on spending; supports targeted investments in infrastructure and veteran services" }
+    }
+  },
+  {
+    "candidate_id": "cand-011",
+    "candidate_name": "Jennifer Park",
+    "positions": {
+      "immigration": { "score": 1, "summary": "Supports DACA and humane immigration policy; treats immigration as a public health issue too" },
+      "healthcare": { "score": 2, "summary": "ER physician who sees the system's failures daily; supports universal coverage and drug price caps" },
+      "economy": { "score": 1, "summary": "Supports paid sick leave mandates and healthcare worker protections" },
+      "education": { "score": 1, "summary": "Supports medical education debt relief and STEM education funding" },
+      "climate": { "score": 2, "summary": "Focused on climate-health connection; supports coastal resilience funding for Florida" },
+      "gun_policy": { "score": 2, "summary": "Treats gun violence as public health crisis; supports comprehensive reform and research funding" },
+      "criminal_justice": { "score": 1, "summary": "Supports mental health crisis response teams as alternative to police for non-violent situations" },
+      "foreign_policy": { "score": 0, "summary": "Supports global health cooperation and pandemic preparedness" },
+      "social_issues": { "score": 1, "summary": "Supports LGBTQ+ healthcare protections and reproductive rights" },
+      "gov_spending": { "score": -1, "summary": "Supports increased healthcare and climate spending offset by defense savings" }
+    }
+  },
+  {
+    "candidate_id": "cand-012",
+    "candidate_name": "William Hayes",
+    "positions": {
+      "immigration": { "score": -2, "summary": "Hardline border security; supports border wall completion and ending sanctuary city policies" },
+      "healthcare": { "score": -2, "summary": "Opposes all government healthcare expansion; wants to repeal ACA and replace with market solutions" },
+      "economy": { "score": -2, "summary": "Aggressive deregulation and tax cuts; wants to eliminate capital gains tax" },
+      "education": { "score": -2, "summary": "Wants to abolish Department of Education; supports full school choice and homeschool tax credits" },
+      "climate": { "score": -2, "summary": "Climate skeptic; opposes environmental regulations; supports fossil fuel expansion" },
+      "gun_policy": { "score": -2, "summary": "Opposes all new gun legislation; supports national concealed carry reciprocity" },
+      "criminal_justice": { "score": -2, "summary": "Tough-on-crime; supports mandatory minimums, opposes bail reform" },
+      "foreign_policy": { "score": 1, "summary": "Strong military spending advocate; hawkish foreign policy" },
+      "social_issues": { "score": -2, "summary": "Social conservative; opposes federal LGBTQ+ protections on religious liberty grounds" },
+      "gov_spending": { "score": 2, "summary": "Wants to cut federal spending by 25%; supports eliminating multiple federal agencies" }
+    }
+  }
+]
