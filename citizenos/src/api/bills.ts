@@ -505,6 +505,12 @@ export async function getBills(filters: {
 
 export async function getBillDetail(billId: string): Promise<Bill | null> {
   await delay(300)
+  if (billId === 'latest') {
+    const sorted = [...MOCK_BILLS].sort(
+      (a, b) => new Date(b.last_action_date).getTime() - new Date(a.last_action_date).getTime()
+    )
+    return sorted[0] ?? null
+  }
   return MOCK_BILLS.find((b) => b.id === billId) ?? null
 }
 
