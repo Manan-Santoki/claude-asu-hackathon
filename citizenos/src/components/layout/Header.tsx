@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Menu, X, LogOut, LayoutDashboard, Settings } from 'lucide-react'
+import { Menu, X, LogOut, LayoutDashboard, Settings, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useThemeStore } from '@/stores/useThemeStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -57,6 +58,19 @@ function SearchBar() {
       placeholder="Search zip or city..."
       className="w-40 lg:w-56"
     />
+  )
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useThemeStore()
+  return (
+    <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+      {theme === 'light' ? (
+        <Moon className="h-4 w-4" />
+      ) : (
+        <Sun className="h-4 w-4" />
+      )}
+    </Button>
   )
 }
 
@@ -142,6 +156,9 @@ export default function Header() {
         <div className="hidden sm:block">
           <SearchBar />
         </div>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Notification Bell */}
         <NotificationBell />
