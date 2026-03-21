@@ -27,7 +27,7 @@ export default function StatePanel() {
         if (!open) setSelectedState(null)
       }}
     >
-      <SheetContent side="right" className="w-[400px] sm:max-w-[400px] overflow-y-auto">
+      <SheetContent side="right" className="w-[520px] sm:max-w-[520px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-lg">
             {state?.name ?? 'Unknown State'}
@@ -50,7 +50,7 @@ export default function StatePanel() {
             </TabsList>
 
             <TabsContent value="bills" className="mt-4">
-              {selectedState && <BillList stateFilter={selectedState} />}
+              {selectedState && <BillList stateFilter={selectedState} compact />}
             </TabsContent>
 
             <TabsContent value="actions" className="mt-4">

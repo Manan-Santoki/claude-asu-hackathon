@@ -128,7 +128,7 @@ export default function USAMap() {
   return (
     <PageWrapper className="!px-0 !py-0 !max-w-none">
       <div
-        className="relative h-[calc(100vh-64px)] w-full overflow-hidden bg-muted/30"
+        className="relative h-[calc(100vh-64px)] w-full overflow-hidden bg-slate-300 dark:bg-slate-900"
         onMouseMove={handleMouseMove}
       >
         <MapControls />
