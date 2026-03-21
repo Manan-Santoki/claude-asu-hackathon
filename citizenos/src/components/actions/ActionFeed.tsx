@@ -24,9 +24,8 @@ export default function ActionFeed({ limit = 5, compact, stateFilter }: ActionFe
       personas: profiles.length > 0 ? profiles : undefined,
       categories: categories.length > 0 ? categories : undefined,
       state: stateFilter ?? user?.state_code,
-      limit,
     })
-  }, [fetchFeed, profiles, categories, user?.state_code, stateFilter, limit])
+  }, [fetchFeed, profiles, categories, user?.state_code, stateFilter])
 
   if (isFeedLoading && feed.length === 0) {
     return (

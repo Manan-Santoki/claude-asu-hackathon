@@ -12,7 +12,7 @@ export interface User {
 // Helpers — map InsForge user to our User interface
 // ---------------------------------------------------------------------------
 
-function mapUser(insforgeUser: { id: string; email: string; profile?: Record<string, unknown> }): User {
+function mapUser(insforgeUser: { id: string; email: string; profile?: Record<string, unknown> | null }): User {
   const profile = insforgeUser.profile ?? {}
   return {
     id: insforgeUser.id,
@@ -31,8 +31,6 @@ export async function signup(email: string, password: string, name: string): Pro
   const { data, error } = await insforge.auth.signUp({ email, password, name })
   if (error) throw new Error(error.message ?? 'Signup failed')
   if (!data?.user) throw new Error('Signup failed — no user returned')
-
-  // If email verification is required, still return the user so we can show the verify screen
   return mapUser(data.user)
 }
 
@@ -45,19 +43,20 @@ export async function login(email: string, password: string): Promise<User> {
 
 export async function loginWithGoogle(): Promise<void> {
   const redirectTo = `${window.location.origin}/dashboard`
-  await insforge.auth.signInWithOAuth({
+  const { error } = await insforge.auth.signInWithOAuth({
     provider: 'google',
     redirectTo,
   })
-  // Browser will redirect to Google — no user returned here
+  if (error) throw new Error(error.message ?? 'Google sign-in failed')
 }
 
 export async function loginWithGitHub(): Promise<void> {
   const redirectTo = `${window.location.origin}/dashboard`
-  await insforge.auth.signInWithOAuth({
+  const { error } = await insforge.auth.signInWithOAuth({
     provider: 'github',
     redirectTo,
   })
+  if (error) throw new Error(error.message ?? 'GitHub sign-in failed')
 }
 
 export async function logout() {
@@ -65,15 +64,19 @@ export async function logout() {
 }
 
 export async function getProfile(): Promise<{ user: User; profiles: string[]; categories: string[] } | null> {
-  const { data, error } = await insforge.auth.getCurrentSession()
-  if (error || !data?.session?.user) return null
+  try {
+    const { data, error } = await insforge.auth.getCurrentUser()
+    if (error || !data?.user) return null
 
-  const user = mapUser(data.session.user)
-  const profile = data.session.user.profile ?? {}
-  const profiles: string[] = (profile.personas as string[]) ?? []
-  const categories: string[] = (profile.categories as string[]) ?? []
+    const user = mapUser(data.user)
+    const profile = (data.user as { profile?: Record<string, unknown> | null }).profile ?? {}
+    const profiles: string[] = (profile.personas as string[]) ?? []
+    const categories: string[] = (profile.categories as string[]) ?? []
 
-  return { user, profiles, categories }
+    return { user, profiles, categories }
+  } catch {
+    return null
+  }
 }
 
 export async function saveOnboarding(stateCode: string, zipCode: string, profiles: string[], categories: string[]) {
@@ -84,16 +87,4 @@ export async function saveOnboarding(stateCode: string, zipCode: string, profile
     categories,
   })
   if (error) throw new Error(error.message ?? 'Failed to save onboarding')
-}
-
-export function getCurrentUser(): User | null {
-  // Synchronous check — rely on cached state from store
-  return null
-}
-
-export function hasCompletedOnboarding(): boolean {
-  // For OAuth redirects, we check this after session restore in the store
-  // This synchronous version can't reliably check InsForge, so we default to false
-  // and let the store handle it after loadProfile()
-  return false
 }
