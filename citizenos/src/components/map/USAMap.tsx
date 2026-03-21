@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   ComposableMap,
   Geographies,
@@ -45,7 +45,7 @@ const MAX_BILL_COUNT = 42
 function getStateFill(
   stateCode: string,
   colorMode: string,
-  homeState?: string
+  _homeState?: string
 ): string {
   const stats = MOCK_STATS[stateCode]
 
@@ -82,7 +82,6 @@ export default function USAMap() {
   const colorMode = useMapStore((s) => s.colorMode)
   const setSelectedState = useMapStore((s) => s.setSelectedState)
   const setHoveredState = useMapStore((s) => s.setHoveredState)
-  const hoveredState = useMapStore((s) => s.hoveredState)
   const user = useAuthStore((s) => s.user)
   const homeState = user?.state_code
 
@@ -146,7 +145,6 @@ export default function USAMap() {
                   const fips = geo.id as string
                   const state = getStateByFips(fips)
                   const stateCode = state?.code ?? ''
-                  const isHovered = hoveredState === stateCode
                   const isHome = homeState === stateCode
                   const fill = getStateFill(stateCode, colorMode, homeState)
 

@@ -14,6 +14,7 @@ const LoginForm = React.lazy(() => import('@/components/auth/LoginForm'))
 const SignupForm = React.lazy(() => import('@/components/auth/SignupForm'))
 const OnboardingFlow = React.lazy(() => import('@/components/auth/OnboardingFlow'))
 const VoteMapPage = React.lazy(() => import('@/components/votemap/VoteMapPage'))
+const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateDetail'))
 
 // Simple placeholder pages
 function RepScoreDashboard() {
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/reps" element={<RepScoreDashboard />} />
         <Route path="/rep/:memberId" element={<RepDetail />} />
         <Route path="/vote" element={<VoteMapPage />} />
+        <Route path="/candidate/:id" element={<CandidateDetail />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/login" element={<LoginForm />} />

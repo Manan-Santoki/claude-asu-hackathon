@@ -1,1 +1,146 @@
-[]
+[
+  {
+    "id": "cand-001",
+    "name": "Maria Santos",
+    "party": "D",
+    "state_code": "AZ",
+    "district": null,
+    "office_sought": "president",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=maria-santos",
+    "bio": "Former Governor of Arizona and Harvard Law graduate. Known for bipartisan immigration reform and expanding Medicaid in her state. Ran a successful small business before entering politics.",
+    "website": "https://example.com/santos2026"
+  },
+  {
+    "id": "cand-002",
+    "name": "James Crawford",
+    "party": "R",
+    "state_code": "TX",
+    "district": null,
+    "office_sought": "president",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=james-crawford",
+    "bio": "U.S. Senator from Texas and former Army Colonel. Champions fiscal conservatism and strong national defense. Led bipartisan veterans' healthcare legislation.",
+    "website": "https://example.com/crawford2026"
+  },
+  {
+    "id": "cand-003",
+    "name": "Priya Sharma",
+    "party": "D",
+    "state_code": "CA",
+    "district": null,
+    "office_sought": "president",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=priya-sharma",
+    "bio": "Tech entrepreneur turned Senator from California. Pioneered AI governance legislation and champions climate action. First-generation immigrant who built a billion-dollar clean energy startup.",
+    "website": "https://example.com/sharma2026"
+  },
+  {
+    "id": "cand-004",
+    "name": "Robert Mitchell",
+    "party": "R",
+    "state_code": "OH",
+    "district": null,
+    "office_sought": "senate",
+    "incumbent": true,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=robert-mitchell",
+    "bio": "Two-term Senator from Ohio. Former steel industry executive focused on manufacturing jobs and trade policy. Known as a moderate Republican willing to cross party lines.",
+    "website": "https://example.com/mitchell-oh"
+  },
+  {
+    "id": "cand-005",
+    "name": "Angela Washington",
+    "party": "D",
+    "state_code": "OH",
+    "district": null,
+    "office_sought": "senate",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=angela-washington",
+    "bio": "Ohio State Representative and former public school teacher. Advocates for education funding, healthcare access, and criminal justice reform. Endorsed by major teachers' unions.",
+    "website": "https://example.com/washington-oh"
+  },
+  {
+    "id": "cand-006",
+    "name": "David Chen",
+    "party": "D",
+    "state_code": "PA",
+    "district": null,
+    "office_sought": "senate",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=david-chen",
+    "bio": "Philadelphia City Councilmember and community organizer. Son of immigrants, he focuses on affordable housing, workers' rights, and environmental justice in urban communities.",
+    "website": "https://example.com/chen-pa"
+  },
+  {
+    "id": "cand-007",
+    "name": "Sarah Thornton",
+    "party": "R",
+    "state_code": "PA",
+    "district": null,
+    "office_sought": "senate",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=sarah-thornton",
+    "bio": "Former U.S. Attorney and anti-corruption advocate. Focused on law enforcement, border security, and reducing government waste. Popular among suburban moderate voters.",
+    "website": "https://example.com/thornton-pa"
+  },
+  {
+    "id": "cand-008",
+    "name": "Marcus Johnson",
+    "party": "D",
+    "state_code": "GA",
+    "district": "5",
+    "office_sought": "house",
+    "incumbent": true,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=marcus-johnson",
+    "bio": "Three-term Congressman from Atlanta. Civil rights attorney who has championed voting rights legislation and police reform. Serves on the Judiciary Committee.",
+    "website": "https://example.com/johnson-ga5"
+  },
+  {
+    "id": "cand-009",
+    "name": "Lisa Kowalski",
+    "party": "R",
+    "state_code": "MI",
+    "district": "7",
+    "office_sought": "house",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=lisa-kowalski",
+    "bio": "Small business owner and former city council member from Grand Rapids. Runs on economic growth, school choice, and Second Amendment rights. Known for her town hall accessibility.",
+    "website": "https://example.com/kowalski-mi7"
+  },
+  {
+    "id": "cand-010",
+    "name": "Carlos Rivera",
+    "party": "D",
+    "state_code": "AZ",
+    "district": "3",
+    "office_sought": "house",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=carlos-rivera",
+    "bio": "Tucson school board president and former Marine. Focuses on veterans' issues, border community development, and education. Bilingual advocate for immigrant families.",
+    "website": "https://example.com/rivera-az3"
+  },
+  {
+    "id": "cand-011",
+    "name": "Jennifer Park",
+    "party": "D",
+    "state_code": "FL",
+    "district": "12",
+    "office_sought": "house",
+    "incumbent": false,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=jennifer-park",
+    "bio": "Emergency room physician from Tampa. Running on healthcare affordability, climate resilience for coastal communities, and gun violence prevention. First-time candidate.",
+    "website": "https://example.com/park-fl12"
+  },
+  {
+    "id": "cand-012",
+    "name": "William Hayes",
+    "party": "R",
+    "state_code": "FL",
+    "district": "12",
+    "office_sought": "house",
+    "incumbent": true,
+    "photo_url": "https://api.dicebear.com/7.x/personas/svg?seed=william-hayes",
+    "bio": "Two-term Congressman and former real estate developer. Prioritizes tax cuts, deregulation, and strong border security. Serves on the Financial Services Committee.",
+    "website": "https://example.com/hayes-fl12"
+  }
+]
