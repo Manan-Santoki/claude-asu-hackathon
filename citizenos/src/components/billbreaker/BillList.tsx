@@ -25,9 +25,10 @@ const STATUS_OPTIONS = [
 
 interface BillListProps {
   stateFilter?: string
+  compact?: boolean
 }
 
-export default function BillList({ stateFilter }: BillListProps) {
+export default function BillList({ stateFilter, compact }: BillListProps) {
   const { bills, totalBills, isLoading, fetchBills, filters } = useBillStore()
   const [searchInput, setSearchInput] = useState('')
   const [category, setCategory] = useState<string>('')
@@ -128,8 +129,8 @@ export default function BillList({ stateFilter }: BillListProps) {
 
       {/* Loading skeleton */}
       {isLoading && bills.length === 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className={compact ? "grid gap-4 grid-cols-1" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
+          {Array.from({ length: compact ? 3 : 6 }).map((_, i) => (
             <div key={i} className="flex flex-col gap-3 rounded-xl border p-6">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-4 w-20" />
@@ -165,7 +166,7 @@ export default function BillList({ stateFilter }: BillListProps) {
 
       {bills.length > 0 && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={compact ? "grid gap-4 grid-cols-1" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
             {bills.map((bill) => (
               <BillCard key={bill.id} bill={bill} />
             ))}

@@ -61,11 +61,17 @@ export const useBillStore = create<BillState>((set, get) => ({
   fetchBills: async (filters) => {
     const currentFilters = get().filters
     const merged = { ...currentFilters, ...filters }
+    const isLoadMore = (merged.page ?? 1) > 1
     set({ isLoading: true, filters: merged })
 
     try {
       const result = await getBills(merged)
-      set({ bills: result.bills, totalBills: result.total, isLoading: false })
+      if (isLoadMore) {
+        const existing = get().bills
+        set({ bills: [...existing, ...result.bills], totalBills: result.total, isLoading: false })
+      } else {
+        set({ bills: result.bills, totalBills: result.total, isLoading: false })
+      }
     } catch {
       set({ isLoading: false })
     }
