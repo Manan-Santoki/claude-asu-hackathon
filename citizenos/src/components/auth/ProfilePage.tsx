@@ -57,7 +57,7 @@ function DisplayValue({ label, value, icon: Icon }: { label: string; value: stri
 // --- Main component ---
 
 export default function ProfilePage() {
-  const { user, profiles, categories, hasCompletedOnboarding, saveOnboarding } = useAuthStore()
+  const { user, profiles, categories, saveOnboarding } = useAuthStore()
 
   const [editing, setEditing] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -144,7 +144,7 @@ export default function ProfilePage() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{user.name || 'User'}</h1>
           <p className="text-muted-foreground">{user.email}</p>
-          {!hasCompletedOnboarding() && (
+          {!user?.onboarding_completed && (
             <div className="mt-3 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
               <span className="text-sm text-muted-foreground">Profile incomplete —</span>
@@ -426,8 +426,8 @@ export default function ProfilePage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Onboarding</span>
-            <Badge variant={hasCompletedOnboarding() ? 'default' : 'secondary'}>
-              {hasCompletedOnboarding() ? 'Complete' : 'Incomplete'}
+            <Badge variant={user?.onboarding_completed ? 'default' : 'secondary'}>
+              {user?.onboarding_completed ? 'Complete' : 'Incomplete'}
             </Badge>
           </div>
         </CardContent>

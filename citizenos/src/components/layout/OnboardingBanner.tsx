@@ -6,10 +6,10 @@ import { useAuthStore } from '@/stores/useAuthStore'
 
 export default function OnboardingBanner() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const hasCompleted = useAuthStore((s) => s.hasCompletedOnboarding)
+  const user = useAuthStore((s) => s.user)
   const [dismissed, setDismissed] = useState(false)
 
-  if (!isAuthenticated || hasCompleted() || dismissed) return null
+  if (!isAuthenticated || user?.onboarding_completed || dismissed) return null
 
   return (
     <div className="bg-primary/10 border-b border-primary/20">

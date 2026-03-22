@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   type Notification,
+  generateNotifications,
   getNotifications,
   getUnreadCount,
   markRead as apiMarkRead,
@@ -8,6 +9,9 @@ import {
   getPreferences,
   updatePreferences as apiUpdatePreferences,
 } from '../api/notifications'
+import { useAuthStore } from './useAuthStore'
+import { getBills } from '../api/bills'
+import { getActions } from '../api/actions'
 
 interface NotifState {
   // Data
@@ -17,8 +21,10 @@ interface NotifState {
 
   // Loading
   isLoading: boolean
+  hasGenerated: boolean
 
   // Actions
+  generateFromProfile: () => Promise<void>
   fetchNotifications: (page?: number, unreadOnly?: boolean) => Promise<void>
   fetchUnreadCount: () => Promise<void>
   markRead: (id: string) => Promise<void>
@@ -33,9 +39,50 @@ export const useNotifStore = create<NotifState>((set, get) => ({
   unreadCount: 0,
   preferences: {},
   isLoading: false,
+  hasGenerated: false,
+
+  generateFromProfile: async () => {
+    const { user, isAuthenticated, profiles, categories, hasCompletedOnboarding } = useAuthStore.getState()
+
+    // Only generate if user is logged in and has completed onboarding
+    if (!isAuthenticated || !user || !hasCompletedOnboarding()) return
+
+    // Don't regenerate if already done this session
+    if (get().hasGenerated) return
+
+    try {
+      // Fetch all content to scan
+      const [billResult, actionResult] = await Promise.all([
+        getBills({ page: 1 }),
+        getActions(),
+      ])
+
+      // Run the matching engine
+      await generateNotifications(
+        user,
+        profiles,
+        categories,
+        billResult.bills,
+        actionResult.actions
+      )
+
+      // Fetch the generated notifications
+      const notifications = await getNotifications()
+      const unreadCount = await getUnreadCount()
+      set({ notifications, unreadCount, hasGenerated: true })
+    } catch {
+      // Silently fail — will retry on next poll
+    }
+  },
 
   fetchNotifications: async (page = 1, unreadOnly = false) => {
     set({ isLoading: true })
+
+    // Generate on first fetch if not done yet
+    if (!get().hasGenerated) {
+      await get().generateFromProfile()
+    }
+
     try {
       const notifications = await getNotifications(page, unreadOnly)
       set({ notifications, isLoading: false })
@@ -45,6 +92,11 @@ export const useNotifStore = create<NotifState>((set, get) => ({
   },
 
   fetchUnreadCount: async () => {
+    // Generate on first count check if not done yet
+    if (!get().hasGenerated) {
+      await get().generateFromProfile()
+    }
+
     try {
       const unreadCount = await getUnreadCount()
       set({ unreadCount })
