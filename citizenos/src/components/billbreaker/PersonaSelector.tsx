@@ -53,29 +53,20 @@ export default function PersonaSelector({ billId }: PersonaSelectorProps) {
     [billId, fetchImpact]
   )
 
-  if (!profiles || profiles.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Complete onboarding to see personalized impacts
-        </p>
-      </div>
-    )
-  }
-
-  // Only show personas that match the user's profiles
-  const availablePersonas = profiles
-    .map((id) => getPersonaById(id))
-    .filter(Boolean) as (typeof PERSONAS)[number][]
+  // Show all personas — user can explore impact on any group, not just their own profiles
+  // Highlight the user's own profiles with a subtle indicator
+  const userProfiles = new Set(profiles ?? [])
+  const availablePersonas = PERSONAS
 
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-muted-foreground">
-        Select your perspectives
+        Select groups to see how this bill affects them
       </p>
       <div className="flex flex-wrap gap-2">
         {availablePersonas.map((persona) => {
           const isSelected = selected.has(persona.id)
+          const isUserProfile = userProfiles.has(persona.id)
           const Icon = ICON_MAP[persona.icon]
 
           return (
@@ -84,7 +75,7 @@ export default function PersonaSelector({ billId }: PersonaSelectorProps) {
               variant={isSelected ? 'default' : 'outline'}
               size="sm"
               onClick={() => handleToggle(persona.id)}
-              className="gap-1.5 transition-all"
+              className={`gap-1.5 transition-all ${isUserProfile && !isSelected ? 'ring-1 ring-primary/40' : ''}`}
             >
               {Icon && <Icon className="size-3.5" />}
               {persona.label}

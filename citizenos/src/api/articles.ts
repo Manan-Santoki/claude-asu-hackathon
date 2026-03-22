@@ -1,12 +1,9 @@
 // In The News — article feed API layer
 // Uses News API (newsapi.org) for live data, falls back to mock data on failure/CORS.
 
+import { insforge } from '@/lib/insforge'
 import { useDataSourceStore } from '@/stores/useDataSourceStore'
 const setArticleSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('articles', s)
-//
-// NOTE: News API's free plan blocks browser-side requests (CORS). In production
-// you would proxy these requests through your own backend (e.g. /api/news?q=...).
-// For now we attempt the direct call and gracefully fall back to mock data.
 
 export type ArticleType = 'news' | 'opinion' | 'blog' | 'press_release'
 
@@ -43,10 +40,28 @@ interface NewsApiResponse {
 }
 
 /**
- * Fetch articles from News API's /everything endpoint.
- * Throws on network / CORS / non-ok responses so the caller can fall back.
+ * Fetch articles via InsForge edge function proxy (avoids CORS),
+ * falling back to direct News API call.
  */
 async function newsFetch(query: string): Promise<NewsApiArticle[]> {
+  // Try InsForge proxy first (no CORS issues, server-side call)
+  try {
+    const { data, error } = await insforge.functions.invoke('fetch-news', {
+      body: { q: query, pageSize: '10', language: 'en' },
+    })
+
+    if (!error && data) {
+      // data may be a Response-like or already parsed
+      const parsed: NewsApiResponse = typeof data === 'string' ? JSON.parse(data) : data
+      if (parsed.status === 'ok' && parsed.articles?.length > 0) {
+        return filterValidArticles(parsed.articles, query)
+      }
+    }
+  } catch {
+    // Proxy unavailable, try direct
+  }
+
+  // Direct News API fallback (will fail with CORS on free plan from browser)
   const apiKey = import.meta.env.VITE_NEWS_API_KEY
   if (!apiKey) {
     throw new Error('VITE_NEWS_API_KEY is not set')
@@ -56,6 +71,7 @@ async function newsFetch(query: string): Promise<NewsApiArticle[]> {
     q: query,
     sortBy: 'publishedAt',
     pageSize: '10',
+    language: 'en',
     apiKey,
   })
 
@@ -65,13 +81,37 @@ async function newsFetch(query: string): Promise<NewsApiArticle[]> {
     throw new Error(`News API responded with ${res.status}`)
   }
 
-  const data: NewsApiResponse = await res.json()
+  const directData: NewsApiResponse = await res.json()
 
-  if (data.status !== 'ok') {
-    throw new Error(`News API status: ${data.status}`)
+  if (directData.status !== 'ok') {
+    throw new Error(`News API status: ${directData.status}`)
   }
 
-  return data.articles
+  return filterValidArticles(directData.articles, query)
+}
+
+/**
+ * Filter out irrelevant, removed, or low-quality articles.
+ * News API sometimes returns articles that only tangentially mention the query,
+ * articles in wrong languages, or "[Removed]" placeholder articles.
+ */
+function filterValidArticles(articles: NewsApiArticle[], query: string): NewsApiArticle[] {
+  const queryWords = query.toLowerCase().split(/\s+/)
+  // Require at least the last name to appear in the title or description
+  const lastName = queryWords[queryWords.length - 1]
+
+  return articles.filter((a) => {
+    // Skip removed/blank articles
+    if (!a.title || a.title === '[Removed]') return false
+    if (!a.url) return false
+
+    // Check that the person's name actually appears in the article
+    const titleLower = (a.title ?? '').toLowerCase()
+    const descLower = (a.description ?? '').toLowerCase()
+    const combined = `${titleLower} ${descLower}`
+
+    return combined.includes(lastName)
+  })
 }
 
 /**

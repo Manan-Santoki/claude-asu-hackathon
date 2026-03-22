@@ -1,6 +1,7 @@
 // BillBreaker API client — Congress.gov live API with mock fallback
 // Uses the Congress.gov v3 API for real bill data
 
+import { insforge } from '@/lib/insforge'
 import { useDataSourceStore } from '@/stores/useDataSourceStore'
 const setSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('bills', s)
 
@@ -211,6 +212,59 @@ function mapCongressBill(raw: Record<string, unknown>): Bill {
 function mapCongressBillDetail(raw: Record<string, unknown>): Bill {
   // The detail endpoint has a slightly different shape: sponsors is fully nested, etc.
   return mapCongressBill(raw)
+}
+
+/** Fetch summary text from Congress.gov summaries endpoint */
+async function fetchBillSummary(congress: number, billType: string, billNumber: number): Promise<string> {
+  try {
+    const data = await congressFetch<{ summaries: { text?: string; actionDesc?: string; updateDate?: string }[] }>(
+      `/bill/${congress}/${billType}/${billNumber}/summaries`
+    )
+    const summaries = data.summaries ?? []
+    if (summaries.length > 0) {
+      // Use the most recent summary (last in the array)
+      const latest = summaries[summaries.length - 1]
+      // Strip HTML tags from CRS summaries
+      const text = (latest.text ?? '').replace(/<[^>]*>/g, '').trim()
+      return text
+    }
+  } catch {
+    // Summary not available
+  }
+  return ''
+}
+
+/** Fetch full text URL/content from Congress.gov text endpoint */
+async function fetchBillText(congress: number, billType: string, billNumber: number): Promise<string> {
+  try {
+    const data = await congressFetch<{ textVersions: { date?: string; type?: string; formats?: { url?: string; type?: string }[] }[] }>(
+      `/bill/${congress}/${billType}/${billNumber}/text`
+    )
+    const versions = data.textVersions ?? []
+    if (versions.length > 0) {
+      // Get the latest text version
+      const latest = versions[versions.length - 1]
+      // Try to get the plain text format
+      const txtFormat = latest.formats?.find((f) => f.type === 'Formatted Text')
+        ?? latest.formats?.find((f) => f.type === 'PDF')
+      if (txtFormat?.url) {
+        // Fetch the actual text content (plain text format)
+        try {
+          const textRes = await fetch(txtFormat.url)
+          if (textRes.ok) {
+            const raw = await textRes.text()
+            // Take first 3000 chars to avoid huge payloads
+            return raw.replace(/<[^>]*>/g, '').slice(0, 3000)
+          }
+        } catch {
+          // Can't fetch text content
+        }
+      }
+    }
+  } catch {
+    // Text not available
+  }
+  return ''
 }
 
 // ---------------------------------------------------------------------------
@@ -872,6 +926,20 @@ export async function getBillDetail(billId: string): Promise<Bill | null> {
       )
       if (data.bill) {
         const bill = mapCongressBillDetail(data.bill)
+
+        // Enrich with summary from the summaries endpoint
+        // (skip full text fetch — it's slow and only needed for deep chat context)
+        try {
+          const summary = await fetchBillSummary(CURRENT_CONGRESS, parsed.type, parsed.number)
+          if (summary) {
+            bill.summary_raw = summary
+            bill.summary_ai = summary
+            bill.ai_processed = true
+          }
+        } catch {
+          // Summary enrichment failed, continue with what we have
+        }
+
         billStore.set(bill.id, bill)
         return bill
       }
@@ -882,46 +950,155 @@ export async function getBillDetail(billId: string): Promise<Bill | null> {
 
   // Check in-memory store (may have been fetched via getBills)
   const stored = billStore.get(billId)
-  if (stored) return stored
+  if (stored) {
+    // If stored bill has no summary, try to fetch it
+    if (!stored.summary_ai && !stored.summary_raw) {
+      const storedParsed = parseBillId(billId)
+      if (storedParsed) {
+        try {
+          const summary = await fetchBillSummary(CURRENT_CONGRESS, storedParsed.type, storedParsed.number)
+          if (summary) {
+            stored.summary_raw = summary
+            stored.summary_ai = summary
+            stored.ai_processed = true
+            billStore.set(billId, stored)
+          }
+        } catch {
+          // Summary enrichment failed, use what we have
+        }
+      }
+    }
+    return stored
+  }
 
   // Fallback to mock data
   return FALLBACK_BILLS.find((b) => b.id === billId) ?? null
 }
 
+export interface BillImpactResult {
+  isGeneral: boolean
+  generalStatement: string
+  affectedGroups: { id: string; label: string; impact: string }[]
+}
+
 export async function getBillImpact(
   billId: string,
-  personas: string[]
-): Promise<Record<string, string>> {
+  _personas?: string[]
+): Promise<BillImpactResult> {
   // Check if we have a fallback bill with rich impact data first
   const fallbackBill = FALLBACK_BILLS.find((b) => b.id === billId)
   if (fallbackBill && Object.keys(fallbackBill.impact_personas).length > 0) {
     await delay(300)
-    const result: Record<string, string> = {}
-    for (const p of personas) {
-      result[p] = fallbackBill.impact_personas[p] ?? 'No specific impact analysis available for this persona.'
-    }
-    return result
+    const groups = Object.entries(fallbackBill.impact_personas).map(([id, impact]) => ({
+      id,
+      label: PERSONA_LABELS[id] ?? id,
+      impact,
+    }))
+    return { isGeneral: false, generalStatement: '', affectedGroups: groups }
   }
 
-  // For live API bills without impact data, check the bill store
+  // Check the bill store cache
   const storedBill = billStore.get(billId)
   if (storedBill && Object.keys(storedBill.impact_personas).length > 0) {
-    const result: Record<string, string> = {}
-    for (const p of personas) {
-      result[p] = storedBill.impact_personas[p] ?? 'No specific impact analysis available for this persona.'
-    }
-    return result
+    const groups = Object.entries(storedBill.impact_personas).map(([id, impact]) => ({
+      id,
+      label: PERSONA_LABELS[id] ?? id,
+      impact,
+    }))
+    return { isGeneral: false, generalStatement: '', affectedGroups: groups }
   }
 
-  // Generate sensible defaults for live API bills
+  // Use AI to determine which groups are affected and how
   const bill = storedBill ?? (await getBillDetail(billId))
-  const result: Record<string, string> = {}
-  for (const p of personas) {
-    result[p] = bill
-      ? `Impact analysis for the "${bill.short_title}" on ${p}s is not yet available. This bill is categorized under ${bill.categories.join(', ')}.`
-      : 'No specific impact analysis available for this persona.'
+  if (!bill) {
+    return { isGeneral: true, generalStatement: 'Unable to analyze impact — bill data not available.', affectedGroups: [] }
   }
-  return result
+
+  const context = buildBillContext(bill)
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const completion = await (insforge.ai as any).chat.completions.create({
+      model: 'anthropic/claude-3.5-haiku',
+      messages: [
+        {
+          role: 'system',
+          content: `You analyze U.S. legislation and determine which groups of people are specifically affected.
+
+Bill data:
+---
+${context}
+---
+
+Analyze this bill and determine which specific groups are affected. Consider groups like: students, veterans, visa holders/immigrants, small business owners, senior citizens, parents, healthcare workers, gig workers, taxpayers, homeowners, renters, teachers, farmers, tech workers, disabled persons, or any other relevant group.
+
+If the bill is general and affects all citizens broadly (e.g. budget bills, general tax changes, government operations), respond with:
+{"is_general": true, "general_statement": "Brief 1-2 sentence explanation of how this affects the general public.", "affected_groups": []}
+
+If the bill targets or significantly impacts specific groups, respond with:
+{"is_general": false, "general_statement": "", "affected_groups": [{"id": "group_id", "label": "Group Name", "impact": "2-3 sentence explanation of specific impact"}]}
+
+Only include groups that are MEANINGFULLY affected — not every group tangentially related.
+Reply in JSON format ONLY — no markdown, no code fences.`,
+        },
+        {
+          role: 'user',
+          content: 'Which groups of people does this bill affect and how?',
+        },
+      ],
+      maxTokens: 1024,
+      temperature: 0.3,
+    })
+
+    const aiText = completion.choices?.[0]?.message?.content
+    if (aiText) {
+      try {
+        const cleaned = aiText.replace(/```json\s*\n?/g, '').replace(/```\s*$/g, '').trim()
+        const parsed = JSON.parse(cleaned)
+        const result: BillImpactResult = {
+          isGeneral: !!parsed.is_general,
+          generalStatement: parsed.general_statement ?? '',
+          affectedGroups: Array.isArray(parsed.affected_groups)
+            ? parsed.affected_groups.map((g: { id: string; label: string; impact: string }) => ({
+                id: g.id ?? 'unknown',
+                label: g.label ?? g.id ?? 'Unknown',
+                impact: g.impact ?? '',
+              }))
+            : [],
+        }
+        // Cache on the bill
+        if (storedBill && result.affectedGroups.length > 0) {
+          for (const g of result.affectedGroups) {
+            storedBill.impact_personas[g.id] = g.impact
+          }
+        }
+        return result
+      } catch {
+        // AI returned non-parseable text
+        return { isGeneral: true, generalStatement: aiText, affectedGroups: [] }
+      }
+    }
+  } catch (err) {
+    console.warn('[getBillImpact] AI call failed:', err)
+  }
+
+  // Fallback
+  return {
+    isGeneral: true,
+    generalStatement: `This bill (${bill.short_title}) is categorized under ${bill.categories.join(', ')}. Impact analysis could not be generated at this time.`,
+    affectedGroups: [],
+  }
+}
+
+const PERSONA_LABELS: Record<string, string> = {
+  student: 'Students',
+  veteran: 'Veterans',
+  visa_holder: 'Visa Holders',
+  small_business: 'Small Business Owners',
+  senior: 'Senior Citizens',
+  parent: 'Parents',
+  healthcare_worker: 'Healthcare Workers',
+  gig_worker: 'Gig Workers',
 }
 
 export async function getBillStory(billId: string): Promise<string> {
@@ -946,51 +1123,119 @@ export async function getBillStory(billId: string): Promise<string> {
   return 'No impact story available for this bill.'
 }
 
+/** Build a comprehensive context string from all available bill data */
+function buildBillContext(bill: Bill): string {
+  const parts: string[] = []
+
+  parts.push(`Bill: ${bill.title} (${bill.bill_type.toUpperCase()} ${bill.bill_number})`)
+  parts.push(`Bill ID: ${bill.bill_id}`)
+  parts.push(`Congress: ${bill.congress}th`)
+  if (bill.sponsor_name) parts.push(`Sponsor: ${bill.sponsor_name} (${bill.sponsor_party}-${bill.sponsor_state})`)
+  parts.push(`Status: ${bill.status.replace(/_/g, ' ')}`)
+  if (bill.status_detail) parts.push(`Status Detail: ${bill.status_detail}`)
+  parts.push(`Introduced: ${bill.introduced_date}`)
+  if (bill.last_action_date) parts.push(`Last Action: ${bill.last_action_date}`)
+  if (bill.categories.length > 0) parts.push(`Categories: ${bill.categories.join(', ')}`)
+  if (bill.summary_raw) parts.push(`Official Summary: ${bill.summary_raw}`)
+  if (bill.summary_ai && bill.summary_ai !== bill.summary_raw) parts.push(`AI Summary: ${bill.summary_ai}`)
+  if (bill.impact_story) parts.push(`Impact Story: ${bill.impact_story}`)
+  if (bill.full_text) parts.push(`Bill Text (excerpt): ${bill.full_text.slice(0, 2000)}`)
+  if (Object.keys(bill.impact_personas).length > 0) {
+    parts.push('Impact by Group:')
+    for (const [persona, impact] of Object.entries(bill.impact_personas)) {
+      parts.push(`  - ${persona}: ${impact}`)
+    }
+  }
+  if (bill.state_relevance.length > 0) parts.push(`Relevant States: ${bill.state_relevance.join(', ')}`)
+  if (bill.congress_url) parts.push(`Congress.gov URL: ${bill.congress_url}`)
+
+  return parts.join('\n')
+}
+
 export async function chatWithBill(
   billId: string,
   message: string,
-  _history: ChatMessage[]
+  history: ChatMessage[]
 ): Promise<{ response: string }> {
-  await delay(800)
-
-  // Try to find the bill from any source
-  const bill = FALLBACK_BILLS.find((b) => b.id === billId)
+  // Try to find the bill from any source; fetch full detail if needed
+  let bill = FALLBACK_BILLS.find((b) => b.id === billId)
     ?? billStore.get(billId)
     ?? null
 
+  // If bill is missing or has no summary, try fetching full detail
+  if (!bill || (!bill.summary_raw && !bill.summary_ai)) {
+    try {
+      const detail = await getBillDetail(billId)
+      if (detail) {
+        bill = detail
+      }
+    } catch {
+      // Use whatever we have
+    }
+  }
+
   if (!bill) return { response: 'Sorry, I could not find that bill.' }
 
-  const lowerMsg = message.toLowerCase()
+  const context = buildBillContext(bill)
+  const hasRichData = !!(bill.summary_ai || bill.summary_raw || bill.full_text)
 
-  // Simple keyword-based responses for demo
-  if (lowerMsg.includes('cost') || lowerMsg.includes('money') || lowerMsg.includes('price') || lowerMsg.includes('spend')) {
-    return {
-      response: `Great question about the financial aspects of the ${bill.short_title}. ${bill.summary_ai ? bill.summary_ai.split('.').slice(-3).join('.') : 'Detailed cost analysis is not yet available for this bill.'} Feel free to ask about specific cost impacts for different groups.`,
-    }
-  }
-  if (lowerMsg.includes('who') && (lowerMsg.includes('sponsor') || lowerMsg.includes('wrote') || lowerMsg.includes('author'))) {
-    return {
-      response: `The ${bill.short_title} was sponsored by ${bill.sponsor_name || 'a member of Congress'} (${bill.sponsor_party || '?'}-${bill.sponsor_state || '?'}). It was introduced on ${bill.introduced_date} and is currently ${bill.status.replace('_', ' ')}.`,
-    }
-  }
-  if (lowerMsg.includes('status') || lowerMsg.includes('pass') || lowerMsg.includes('vote')) {
-    return {
-      response: `Current status: ${bill.status_detail || bill.status}. The bill was introduced on ${bill.introduced_date} and last saw action on ${bill.last_action_date}.`,
-    }
-  }
-  if (lowerMsg.includes('oppose') || lowerMsg.includes('against') || lowerMsg.includes('criticism')) {
-    return {
-      response: `Critics of the ${bill.short_title} have raised concerns about its cost and implementation timeline. Some argue that the approach may have unintended consequences for ${bill.categories.join(' and ')} policy. Would you like me to break down specific criticisms?`,
-    }
-  }
-  if (lowerMsg.includes('support') || lowerMsg.includes('favor') || lowerMsg.includes('benefit')) {
-    return {
-      response: `Supporters of the ${bill.short_title} argue it addresses a critical need in ${bill.categories[0]}. ${bill.impact_story ? bill.impact_story.split('.')[0] + '.' : 'The bill has broad implications.'} The bill has backing from both advocacy groups and some bipartisan lawmakers.`,
-    }
+  // Build system prompt with all bill data
+  const systemPrompt = `You are CitizenOS Bill Assistant, an AI that helps citizens understand U.S. legislation in plain language.
+
+You have the following bill data available:
+---
+${context}
+---
+
+Instructions:
+- Answer the user's question about this bill using the data above.
+- Be concise, accurate, and use plain language that any citizen can understand.
+- If the data above doesn't contain enough information to fully answer, say what you know and note what's uncertain.
+- Use markdown formatting for readability (bold for emphasis, bullet points for lists).
+- If asked about impact on specific groups and you have persona data, use it.
+- Stay factual — do not make up provisions or numbers not in the data.
+- Keep responses focused and under 300 words unless the user asks for detail.`
+
+  // Build messages array with chat history
+  const messages: { role: string; content: string }[] = [
+    { role: 'system', content: systemPrompt },
+  ]
+
+  // Include recent chat history for context (last 10 messages)
+  const recentHistory = history.slice(-10)
+  for (const msg of recentHistory) {
+    messages.push({ role: msg.role, content: msg.content })
   }
 
+  // Add current user message (if not already the last in history)
+  const lastHistoryMsg = recentHistory[recentHistory.length - 1]
+  if (!lastHistoryMsg || lastHistoryMsg.content !== message || lastHistoryMsg.role !== 'user') {
+    messages.push({ role: 'user', content: message })
+  }
+
+  // Call AI with web search enabled when we don't have rich bill data
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const completion = await (insforge.ai as any).chat.completions.create({
+      model: 'anthropic/claude-3.5-haiku',
+      messages,
+      maxTokens: 1024,
+      temperature: 0.3,
+      ...(!hasRichData ? { webSearch: { enabled: true, maxResults: 3 } } : {}),
+    })
+
+    const aiResponse = completion.choices?.[0]?.message?.content
+    if (aiResponse) {
+      return { response: aiResponse }
+    }
+  } catch (err) {
+    console.warn('[chatWithBill] AI call failed, using fallback:', err)
+  }
+
+  // Fallback: return a structured response using available data
+  const summaryText = bill.summary_ai || bill.summary_raw || bill.title
   return {
-    response: `The ${bill.short_title} is a ${bill.bill_type === 'hr' ? 'House' : 'Senate'} bill focused on ${bill.categories.join(', ')}. ${bill.summary_ai ? bill.summary_ai.split('.').slice(0, 2).join('.') + '.' : bill.title} What specific aspect would you like to know more about?`,
+    response: `**${bill.short_title}** (${bill.bill_type === 'hr' ? 'House' : 'Senate'} Bill ${bill.bill_number})\n\n${summaryText}\n\n**Sponsor:** ${bill.sponsor_name || 'Unknown'} (${bill.sponsor_party}-${bill.sponsor_state})\n**Status:** ${bill.status_detail || bill.status.replace(/_/g, ' ')}\n**Categories:** ${bill.categories.join(', ')}\n\n${bill.impact_story ? `**Impact:** ${bill.impact_story.split('.').slice(0, 2).join('.')}. ` : ''}`,
   }
 }
 

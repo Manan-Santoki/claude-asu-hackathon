@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   type Bill,
   type ChatMessage,
+  type BillImpactResult,
   getBills,
   getBillDetail,
   getBillImpact,
@@ -24,7 +25,7 @@ interface BillState {
   bills: Bill[]
   selectedBill: Bill | null
   chatHistory: ChatMessage[]
-  impactResults: Record<string, string>
+  impactResults: BillImpactResult | null
   totalBills: number
   filters: BillFilters
   savedBillIds: Set<string>
@@ -37,7 +38,7 @@ interface BillState {
   // Actions
   fetchBills: (filters?: Partial<BillFilters>) => Promise<void>
   fetchBillDetail: (billId: string) => Promise<void>
-  fetchImpact: (billId: string, personas: string[]) => Promise<void>
+  fetchImpact: (billId: string) => Promise<void>
   sendChatMessage: (billId: string, message: string) => Promise<void>
   toggleSave: (billId: string) => Promise<void>
   clearChat: () => void
@@ -50,7 +51,7 @@ export const useBillStore = create<BillState>((set, get) => ({
   bills: [],
   selectedBill: null,
   chatHistory: [],
-  impactResults: {},
+  impactResults: null,
   totalBills: 0,
   filters: { page: 1 },
   savedBillIds: getSavedBillIdsSync(),
@@ -78,7 +79,7 @@ export const useBillStore = create<BillState>((set, get) => ({
   },
 
   fetchBillDetail: async (billId) => {
-    set({ isLoading: true, selectedBill: null, chatHistory: [], impactResults: {} })
+    set({ isLoading: true, selectedBill: null, chatHistory: [], impactResults: null })
     try {
       const bill = await getBillDetail(billId)
       set({ selectedBill: bill, isLoading: false })
@@ -87,10 +88,10 @@ export const useBillStore = create<BillState>((set, get) => ({
     }
   },
 
-  fetchImpact: async (billId, personas) => {
+  fetchImpact: async (billId) => {
     set({ isImpactLoading: true })
     try {
-      const results = await getBillImpact(billId, personas)
+      const results = await getBillImpact(billId)
       set({ impactResults: results, isImpactLoading: false })
     } catch {
       set({ isImpactLoading: false })
@@ -156,6 +157,6 @@ export const useBillStore = create<BillState>((set, get) => ({
   },
 
   clearSelectedBill: () => {
-    set({ selectedBill: null, chatHistory: [], impactResults: {} })
+    set({ selectedBill: null, chatHistory: [], impactResults: null })
   },
 }))
