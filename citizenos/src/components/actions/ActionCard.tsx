@@ -7,7 +7,7 @@ import { useActionStore } from '@/stores/useActionStore'
 import type { GovernmentAction } from '@/api/actions'
 
 const impactColors: Record<string, string> = {
-  high: 'bg-red-100 text-red-700 border-red-300',
+  high: 'bg-red-200 text-red-900 border-red-400 font-semibold',
   medium: 'bg-yellow-100 text-yellow-700 border-yellow-300',
   low: 'bg-green-100 text-green-700 border-green-300',
 }
@@ -45,8 +45,8 @@ export default function ActionCard({ action, compact }: ActionCardProps) {
         </h3>
 
         {!compact && (
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-            {action.summary_ai.split('.').slice(0, 2).join('.')}.
+          <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
+            {action.summary_ai}
           </p>
         )}
 
@@ -85,6 +85,10 @@ export default function ActionCard({ action, compact }: ActionCardProps) {
             {action.legal_challenges.length} legal challenge{action.legal_challenges.length > 1 ? 's' : ''}
           </p>
         )}
+
+        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+          Published: {new Date(action.publication_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </p>
       </CardContent>
     </Card>
   )

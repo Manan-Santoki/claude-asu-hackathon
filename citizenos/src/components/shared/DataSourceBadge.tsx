@@ -33,6 +33,17 @@ export default function DataSourceBadge({ sourceKey, className = '' }: DataSourc
     )
   }
 
+  if (status === 'cached') {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400 ${className}`}
+      >
+        <Wifi className="h-3 w-3" />
+        Cached
+      </span>
+    )
+  }
+
   // demo
   return (
     <span

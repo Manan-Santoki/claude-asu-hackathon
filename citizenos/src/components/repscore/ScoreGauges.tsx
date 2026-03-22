@@ -12,12 +12,15 @@ function GaugeChart({
   value,
   label,
   color,
+  notAvailable,
 }: {
   value: number
   label: string
   color: string
+  notAvailable?: boolean
 }) {
-  const data = [{ value, fill: color }]
+  const displayValue = notAvailable ? 0 : value
+  const data = [{ value: displayValue, fill: notAvailable ? 'hsl(var(--muted))' : color }]
 
   return (
     <div className="flex flex-col items-center">
@@ -47,7 +50,7 @@ function GaugeChart({
           />
         </RadialBarChart>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-lg font-bold">{value}</span>
+          <span className="text-lg font-bold">{notAvailable ? 'N/A' : value}</span>
         </div>
       </div>
       <span className="text-xs text-muted-foreground mt-1 text-center">{label}</span>
@@ -75,10 +78,12 @@ export default function ScoreGauges({ scores, isLoading }: ScoreGaugesProps) {
 
   if (!scores) return null
 
+  const noPromiseData = scores.promise_alignment_score === -1
+  const alignValue = noPromiseData ? 0 : scores.promise_alignment_score
   const alignColor =
-    scores.promise_alignment_score >= 70
+    alignValue >= 70
       ? '#22c55e'
-      : scores.promise_alignment_score >= 40
+      : alignValue >= 40
       ? '#eab308'
       : '#ef4444'
 
@@ -90,9 +95,10 @@ export default function ScoreGauges({ scores, isLoading }: ScoreGaugesProps) {
       <CardContent>
         <div className="flex justify-around flex-wrap gap-4">
           <GaugeChart
-            value={scores.promise_alignment_score}
-            label="Promise Alignment"
+            value={alignValue}
+            label={noPromiseData ? 'Promise Alignment (N/A)' : 'Promise Alignment'}
             color={alignColor}
+            notAvailable={noPromiseData}
           />
           <GaugeChart
             value={scores.party_loyalty_score}

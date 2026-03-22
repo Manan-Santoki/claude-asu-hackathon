@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import {
   type Bill,
   type ChatMessage,
@@ -74,6 +75,7 @@ export const useBillStore = create<BillState>((set, get) => ({
       }
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load bills. Using cached data if available.')
     }
   },
 
@@ -84,6 +86,7 @@ export const useBillStore = create<BillState>((set, get) => ({
       set({ selectedBill: bill, isLoading: false })
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load bill details.')
     }
   },
 
@@ -94,6 +97,7 @@ export const useBillStore = create<BillState>((set, get) => ({
       set({ impactResults: results, isImpactLoading: false })
     } catch {
       set({ isImpactLoading: false })
+      toast.error('Failed to load impact analysis.')
     }
   },
 

@@ -93,6 +93,13 @@ export default function BillCard({ bill }: BillCardProps) {
           {bill.short_title}
         </h3>
 
+        {/* Summary preview */}
+        {bill.summary_ai && (
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+            {bill.summary_ai.replace(/^##\s+.+\n\n/, '').replace(/\n/g, ' ').replace(/- /g, '').trim()}
+          </p>
+        )}
+
         {/* Category badges */}
         <div className="flex flex-wrap gap-1.5">
           {bill.categories.map((catId) => {

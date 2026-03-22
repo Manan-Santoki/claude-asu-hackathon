@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useQuizStore } from '@/stores/useQuizStore'
 import PolicyQuiz from './PolicyQuiz'
@@ -7,6 +8,15 @@ import { RotateCcw, Vote } from 'lucide-react'
 export default function VoteMapPage() {
   const hasCompleted = useQuizStore((s) => s.hasCompleted)
   const resetQuiz = useQuizStore((s) => s.resetQuiz)
+  const restoreQuiz = useQuizStore((s) => s.restoreQuiz)
+  const isRestored = useQuizStore((s) => s.isRestored)
+
+  // Restore quiz results from DB/localStorage on mount
+  useEffect(() => {
+    if (!isRestored) {
+      restoreQuiz()
+    }
+  }, [isRestored, restoreQuiz])
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">

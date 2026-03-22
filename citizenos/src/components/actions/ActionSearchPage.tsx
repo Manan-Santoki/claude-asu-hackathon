@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Search, Filter } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Search, Filter, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,6 +34,7 @@ export default function ActionSearchPage() {
   const [type, setType] = useState<string>('')
   const [category, setCategory] = useState<string>('')
   const [persona, setPersona] = useState<string>('')
+  const [sortBy, setSortBy] = useState<string>('newest')
 
   const loadActions = useCallback(
     (page = 1) => {
@@ -48,17 +49,42 @@ export default function ActionSearchPage() {
     [fetchActions, type, category, persona, searchInput]
   )
 
+  // Auto-search on filter changes
   useEffect(() => {
     loadActions(1)
   }, [type, category, persona]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = () => {
-    loadActions(1)
-  }
+  // Debounced search-as-you-type
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadActions(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch()
-  }
+  const activeFilterCount = [type, category, persona, searchInput].filter(Boolean).length
+
+  const sortedActions = useMemo(() => {
+    const arr = [...actions]
+    switch (sortBy) {
+      case 'oldest':
+        arr.sort((a, b) => new Date(a.publication_date).getTime() - new Date(b.publication_date).getTime())
+        break
+      case 'impact_high': {
+        const order: Record<string, number> = { high: 0, medium: 1, low: 2 }
+        arr.sort((a, b) => (order[a.impact_level] ?? 2) - (order[b.impact_level] ?? 2))
+        break
+      }
+      case 'impact_low': {
+        const order: Record<string, number> = { low: 0, medium: 1, high: 2 }
+        arr.sort((a, b) => (order[a.impact_level] ?? 2) - (order[b.impact_level] ?? 2))
+        break
+      }
+      default: // newest
+        arr.sort((a, b) => new Date(b.publication_date).getTime() - new Date(a.publication_date).getTime())
+    }
+    return arr
+  }, [actions, sortBy])
 
   const handleLoadMore = () => {
     const nextPage = (filters.page ?? 1) + 1
@@ -83,6 +109,11 @@ export default function ActionSearchPage() {
             Track executive orders, rules, court rulings, and more
           </p>
         </div>
+        {!isLoading && totalActions > 0 && (
+          <span className="ml-auto text-sm font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">
+            {totalActions} results
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -94,7 +125,6 @@ export default function ActionSearchPage() {
               placeholder="Search actions..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
               className="pl-9 h-9"
             />
           </div>
@@ -141,10 +171,35 @@ export default function ActionSearchPage() {
             </SelectContent>
           </Select>
 
-          <Button size="sm" onClick={handleSearch} className="h-9">
-            Search
-          </Button>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="impact_high">Impact: High → Low</SelectItem>
+              <SelectItem value="impact_low">Impact: Low → High</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
+        {activeFilterCount > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setType('')
+              setCategory('')
+              setPersona('')
+              setSearchInput('')
+              setSortBy('newest')
+            }}>
+              <X className="h-3 w-3 mr-1" /> Clear all
+            </Button>
+          </div>
+        )}
 
         {/* Loading skeleton */}
         {isLoading && actions.length === 0 && (
@@ -180,10 +235,10 @@ export default function ActionSearchPage() {
         )}
 
         {/* Action cards grid */}
-        {actions.length > 0 && (
+        {sortedActions.length > 0 && (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {actions.map((action) => (
+              {sortedActions.map((action) => (
                 <ActionCard key={action.id} action={action} />
               ))}
             </div>

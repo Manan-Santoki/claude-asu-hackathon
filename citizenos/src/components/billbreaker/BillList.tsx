@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Search } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Search, X, ArrowUpDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,6 +34,7 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
   const [searchInput, setSearchInput] = useState('')
   const [category, setCategory] = useState<string>('')
   const [status, setStatus] = useState<string>('')
+  const [sortBy, setSortBy] = useState<string>('newest')
 
   const loadBills = useCallback(
     (page = 1) => {
@@ -53,15 +54,32 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
     loadBills(1)
   }, [category, status, stateFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = () => {
-    loadBills(1)
-  }
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadBills(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch()
+  const activeFilterCount = [category, status, searchInput].filter(Boolean).length
+
+  const sortedBills = useMemo(() => {
+    const arr = [...bills]
+    switch (sortBy) {
+      case 'oldest':
+        arr.sort((a, b) => new Date(a.introduced_date || '').getTime() - new Date(b.introduced_date || '').getTime())
+        break
+      case 'status': {
+        const order: Record<string, number> = { enacted: 0, passed_senate: 1, passed_house: 2, in_committee: 3, introduced: 4, vetoed: 5 }
+        arr.sort((a, b) => (order[a.status] ?? 4) - (order[b.status] ?? 4))
+        break
+      }
+      default: // newest
+        arr.sort((a, b) => new Date(b.last_action_date || b.introduced_date || '').getTime() - new Date(a.last_action_date || a.introduced_date || '').getTime())
     }
-  }
+    return arr
+  }, [bills, sortBy])
 
   const handleLoadMore = () => {
     const nextPage = (filters.page ?? 1) + 1
@@ -90,7 +108,7 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
             placeholder="Search bills..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
+            onKeyDown={(e) => { if (e.key === 'Enter') loadBills(1) }}
             className="pl-9 h-9"
           />
         </div>
@@ -125,11 +143,36 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
           </SelectContent>
         </Select>
 
-        {/* Search button */}
-        <Button size="sm" onClick={handleSearch} className="h-9">
-          Search
-        </Button>
+        {/* Sort */}
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-[140px]">
+            <ArrowUpDown className="h-3 w-3 mr-1" />
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+            <SelectItem value="status">By Status</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Active filter indicators */}
+      {activeFilterCount > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+          </span>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => {
+            setCategory('')
+            setStatus('')
+            setSearchInput('')
+            setSortBy('newest')
+          }}>
+            <X className="h-3 w-3 mr-1" /> Clear all
+          </Button>
+        </div>
+      )}
 
       {/* Loading skeleton */}
       {isLoading && bills.length === 0 && (
@@ -171,7 +214,7 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
       {bills.length > 0 && (
         <>
           <div className={compact ? "grid gap-4 grid-cols-1" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
-            {bills.map((bill) => (
+            {sortedBills.map((bill) => (
               <BillCard key={bill.id} bill={bill} />
             ))}
           </div>

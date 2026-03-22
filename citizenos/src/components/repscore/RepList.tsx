@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import RepCard from './RepCard'
 import { useRepStore } from '@/stores/useRepStore'
 import DataSourceBadge from '@/components/shared/DataSourceBadge'
-import { getRepScore } from '@/api/reps'
+import { getRepScoreBatch } from '@/api/reps'
 import type { RepScores } from '@/api/reps'
 
 interface RepListProps {
@@ -19,20 +19,10 @@ export default function RepList({ stateFilter, compact }: RepListProps) {
     fetchReps({ state: stateFilter })
   }, [stateFilter, fetchReps])
 
-  // Fetch scores for all reps
+  // Batch fetch scores for all reps (avoids N+1 API calls)
   useEffect(() => {
     if (reps.length === 0) return
-    const fetchScores = async () => {
-      const results: Record<string, RepScores> = {}
-      await Promise.all(
-        reps.map(async (rep) => {
-          const score = await getRepScore(rep.member_id)
-          results[rep.member_id] = score
-        })
-      )
-      setScores(results)
-    }
-    fetchScores()
+    getRepScoreBatch(reps).then(setScores).catch(() => {})
   }, [reps])
 
   if (isLoading) {

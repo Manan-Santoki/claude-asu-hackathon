@@ -50,7 +50,7 @@ export default function RepCard({ rep, score, compact }: RepCardProps) {
 
             {!compact && (
               <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                <span>Party loyalty: {rep.votes_with_party_pct}%</span>
+                <span>Party loyalty: {Math.round(rep.votes_with_party_pct * 10) / 10}%</span>
                 <span>Attendance: {Math.round(100 - rep.missed_votes_pct)}%</span>
               </div>
             )}

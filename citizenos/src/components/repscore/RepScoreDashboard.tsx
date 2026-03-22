@@ -12,7 +12,7 @@ import {
 import PageWrapper from '@/components/layout/PageWrapper'
 import RepCard from './RepCard'
 import { useRepStore } from '@/stores/useRepStore'
-import { getRepScore } from '@/api/reps'
+import { getRepScoreBatch } from '@/api/reps'
 import type { RepScores } from '@/api/reps'
 import { US_STATES } from '@/lib/states'
 
@@ -29,13 +29,7 @@ export default function RepScoreDashboard() {
   useEffect(() => {
     if (reps.length === 0) return
     const fetchScores = async () => {
-      const results: Record<string, RepScores> = {}
-      await Promise.all(
-        reps.map(async (rep) => {
-          const score = await getRepScore(rep.member_id)
-          results[rep.member_id] = score
-        })
-      )
+      const results = await getRepScoreBatch(reps)
       setScores(results)
     }
     fetchScores()

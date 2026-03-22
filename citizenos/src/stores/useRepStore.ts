@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import {
   type Representative,
   type RepVote,
@@ -94,6 +95,7 @@ export const useRepStore = create<RepState>((set, get) => ({
       set({ reps, isLoading: false })
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load representatives.')
     }
   },
 
@@ -115,6 +117,7 @@ export const useRepStore = create<RepState>((set, get) => ({
       set({ selectedRep: rep, isLoading: false })
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load representative details.')
     }
   },
 

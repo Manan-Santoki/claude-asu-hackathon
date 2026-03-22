@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import {
   type GovernmentAction,
   type ActionType,
@@ -76,6 +77,7 @@ export const useActionStore = create<ActionState>((set, get) => ({
       set({ actions: result.actions, totalActions: result.total, isLoading: false })
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load actions. Using cached data if available.')
     }
   },
 
@@ -86,6 +88,7 @@ export const useActionStore = create<ActionState>((set, get) => ({
       set({ selectedAction: action, isLoading: false })
     } catch {
       set({ isLoading: false })
+      toast.error('Failed to load action details.')
     }
   },
 
@@ -96,6 +99,7 @@ export const useActionStore = create<ActionState>((set, get) => ({
       set({ impactResults: results, isImpactLoading: false })
     } catch {
       set({ isImpactLoading: false })
+      toast.error('Failed to load impact analysis.')
     }
   },
 
