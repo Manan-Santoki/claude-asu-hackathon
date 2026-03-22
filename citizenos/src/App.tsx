@@ -6,6 +6,7 @@ import OnboardingBanner from '@/components/layout/OnboardingBanner'
 import PageWrapper from '@/components/layout/PageWrapper'
 import NotifPreferences from '@/components/billbreaker/NotifPreferences'
 import { useAuthStore } from '@/stores/useAuthStore'
+import DemoOverlay from '@/components/demo/DemoOverlay'
 
 // Lazy-loaded route components
 const MapView = React.lazy(() => import('@/components/map/USAMap'))
@@ -56,6 +57,7 @@ function RootLayout() {
         <Outlet />
       </Suspense>
       <Toaster />
+      <DemoOverlay />
     </div>
   )
 }

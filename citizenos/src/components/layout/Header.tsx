@@ -20,6 +20,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import NotificationBell from '@/components/billbreaker/NotificationBell'
+import DemoButton from '@/components/demo/DemoButton'
+import DemoBadge from '@/components/demo/DemoBadge'
 
 function NavTabs({ onClick }: { onClick?: () => void }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -174,6 +176,10 @@ export default function Header() {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Demo */}
+        <DemoButton />
+        <DemoBadge />
 
         {/* Search */}
         <div className="hidden sm:block">
