@@ -11,6 +11,7 @@ import PromiseTracker from './PromiseTracker'
 import VotingRecord from './VotingRecord'
 import BillsSponsored from './BillsSponsored'
 import ContactRep from './ContactRep'
+import InTheNews from '@/components/shared/InTheNews'
 import { useRepStore } from '@/stores/useRepStore'
 
 export default function RepDetailPage() {
@@ -90,6 +91,8 @@ export default function RepDetailPage() {
         <RepHeader rep={selectedRep} />
 
         <Separator />
+
+        <InTheNews personId={selectedRep.member_id} personName={selectedRep.name} />
 
         <ScoreGauges scores={scores} isLoading={isScoreLoading} />
 
