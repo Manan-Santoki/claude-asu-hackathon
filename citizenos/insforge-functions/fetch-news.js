@@ -3,7 +3,7 @@
 // Accepts GET ?q=<query>&pageSize=<n> OR POST { q, pageSize, language }
 
 const NEWS_API_BASE = 'https://newsapi.org/v2';
-const NEWS_API_KEY = '88e2a35df2564496a91449031c99f45e';
+const NEWS_API_KEY = Deno.env.get('NEWS_API_KEY');
 
 export default async function(req) {
   const corsHeaders = {
