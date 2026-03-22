@@ -137,22 +137,24 @@ export default function ProfilePage() {
   return (
     <PageWrapper>
       {/* Header section */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8">
-        <Avatar className="h-20 w-20 text-2xl">
-          <AvatarFallback>{initials}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">{user.name || 'User'}</h1>
-          <p className="text-muted-foreground">{user.email}</p>
-          {!user?.onboarding_completed && (
-            <div className="mt-3 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Profile incomplete —</span>
-              <Button asChild variant="link" size="sm" className="h-auto p-0 text-sm">
-                <Link to="/onboarding">Complete onboarding</Link>
-              </Button>
-            </div>
-          )}
+      <div className="relative rounded-xl border bg-gradient-to-r from-primary/5 via-card to-card p-6 sm:p-8 mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <Avatar className="h-20 w-20 text-2xl ring-4 ring-background shadow-md">
+            <AvatarFallback className="bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold tracking-tight">{user.name || 'User'}</h1>
+            <p className="text-muted-foreground">{user.email}</p>
+            {!user?.onboarding_completed && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm text-muted-foreground">Profile incomplete —</span>
+                <Button asChild variant="link" size="sm" className="h-auto p-0 text-sm">
+                  <Link to="/onboarding">Complete onboarding</Link>
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

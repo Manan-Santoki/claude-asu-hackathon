@@ -39,11 +39,20 @@ function SettingsPage() {
   )
 }
 
-// Loading fallback
+// Loading fallback — skeleton placeholder
 function LoadingFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="animate-pulse text-muted-foreground">Loading...</div>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" role="status" aria-label="Loading content">
+      <div className="animate-pulse space-y-6">
+        <div className="h-8 w-48 rounded-md bg-muted" />
+        <div className="h-4 w-80 rounded bg-muted" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 rounded-lg bg-muted" />
+          ))}
+        </div>
+      </div>
+      <span className="sr-only">Loading...</span>
     </div>
   )
 }
@@ -52,11 +61,16 @@ function LoadingFallback() {
 function RootLayout() {
   return (
     <div className="min-h-screen bg-background">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <Header />
       <OnboardingBanner />
-      <Suspense fallback={<LoadingFallback />}>
-        <Outlet />
-      </Suspense>
+      <div id="main-content">
+        <Suspense fallback={<LoadingFallback />}>
+          <Outlet />
+        </Suspense>
+      </div>
       <Toaster />
       <DemoOverlay />
     </div>

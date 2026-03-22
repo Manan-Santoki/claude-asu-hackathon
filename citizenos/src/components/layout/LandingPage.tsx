@@ -8,6 +8,9 @@ import {
   Shield,
   ArrowRight,
   ChevronRight,
+  TrendingUp,
+  Eye,
+  Scale,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +54,13 @@ const features = [
   },
 ]
 
+const stats = [
+  { value: '2,400+', label: 'Bills Tracked', icon: FileText },
+  { value: '535', label: 'Representatives', icon: Users },
+  { value: '50', label: 'States Covered', icon: MapPin },
+  { value: '100%', label: 'Free & Open', icon: Scale },
+]
+
 const sampleActions = [
   {
     type: 'Executive Order',
@@ -78,49 +88,106 @@ const sampleActions = [
   },
 ]
 
+const trustSignals = [
+  { icon: Eye, text: 'Non-partisan — we show facts, not opinions' },
+  { icon: TrendingUp, text: 'AI-powered analysis from official government sources' },
+  { icon: Shield, text: 'Your data stays private — we never sell it' },
+]
+
 export default function LandingPage() {
   return (
     <div className="min-h-[calc(100vh-64px)]">
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 sm:py-28 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
-            Government actions,{' '}
-            <span className="text-primary">explained for you</span>
-          </h1>
-          <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            CitizenOS tracks bills, executive orders, agency rules, and court rulings —
-            then uses AI to show you exactly how they affect your life.
-          </p>
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button asChild size="lg" className="text-base px-8">
-              <Link to="/signup">
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="text-base px-8">
-              <Link to="/login">Sign In</Link>
-            </Button>
+      <section className="relative overflow-hidden">
+        {/* Subtle gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-accent/5" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
+
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-32">
+          <div className="text-center max-w-3xl mx-auto">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-8">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              Tracking government actions in real time
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1]">
+              Government actions,{' '}
+              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                explained for you
+              </span>
+            </h1>
+            <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              CitizenOS tracks bills, executive orders, agency rules, and court rulings —
+              then uses AI to show you exactly how they affect your life.
+            </p>
+
+            {/* CTA buttons */}
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button asChild size="lg" className="text-base px-8 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+                <Link to="/signup">
+                  Get Started Free
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="text-base px-8">
+                <Link to="/map">Explore the Map</Link>
+              </Button>
+            </div>
+
+            {/* Trust signals */}
+            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
+              {trustSignals.map((signal) => (
+                <div key={signal.text} className="flex items-center gap-2">
+                  <signal.icon className="h-4 w-4 text-primary/70 shrink-0" />
+                  <span>{signal.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats bar */}
+      <section className="border-y bg-card">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-border">
+            {stats.map((stat) => (
+              <div key={stat.label} className="flex items-center justify-center gap-3 py-6 sm:py-8">
+                <stat.icon className="h-5 w-5 text-primary/60 hidden sm:block" />
+                <div className="text-center sm:text-left">
+                  <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{stat.value}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{stat.label}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Features grid */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4">
-          Everything you need to stay informed
-        </h2>
-        <p className="text-muted-foreground text-center mb-12 max-w-xl mx-auto">
-          Go beyond the headlines. Understand what the government is actually doing and how it impacts you.
-        </p>
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+        <div className="text-center mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+            Everything you need to stay informed
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Go beyond the headlines. Understand what the government is actually doing and how it impacts you.
+          </p>
+        </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <Card key={feature.title} className="border-border/60">
+            <Card
+              key={feature.title}
+              className="group border-border/60 transition-all duration-200 hover:shadow-md hover:border-primary/20"
+            >
               <CardHeader>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="rounded-lg bg-primary/10 p-2">
+                  <div className="rounded-lg bg-primary/10 p-2.5 transition-colors duration-200 group-hover:bg-primary/15">
                     <feature.icon className="h-5 w-5 text-primary" />
                   </div>
                   <CardTitle className="text-lg">{feature.title}</CardTitle>
@@ -135,18 +202,23 @@ export default function LandingPage() {
       </section>
 
       {/* Sample actions preview */}
-      <section className="bg-muted/40">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4">
-            Recent government actions
-          </h2>
-          <p className="text-muted-foreground text-center mb-10 max-w-xl mx-auto">
-            Here's a preview of what CitizenOS tracks. Sign up to see personalized impact analysis.
-          </p>
+      <section className="bg-muted/40 border-y">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+              Recent government actions
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Here's a preview of what CitizenOS tracks. Sign up to see personalized impact analysis.
+            </p>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2 max-w-3xl mx-auto">
             {sampleActions.map((action) => (
-              <Card key={action.title} className="border-border/60">
+              <Card
+                key={action.title}
+                className="group border-border/60 transition-all duration-200 hover:shadow-md"
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between mb-2">
                     <span
@@ -164,11 +236,11 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="text-center mt-8">
-            <Button asChild variant="outline">
+          <div className="text-center mt-10">
+            <Button asChild variant="outline" className="group">
               <Link to="/signup">
                 Sign up to see full details
-                <ChevronRight className="ml-1 h-4 w-4" />
+                <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </Button>
           </div>
@@ -176,28 +248,38 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold mb-4">
-          Democracy works better when you're informed
-        </h2>
-        <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
-          Create a free account to get personalized impact analysis, track your representatives, and find candidates that match your values.
-        </p>
-        <Button asChild size="lg" className="text-base px-8">
-          <Link to="/signup">
-            Create Your Free Account
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/5 via-transparent to-transparent" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 sm:py-24 text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+            Democracy works better when you're informed
+          </h2>
+          <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
+            Create a free account to get personalized impact analysis, track your representatives, and find candidates that match your values.
+          </p>
+          <Button asChild size="lg" className="text-base px-8 shadow-lg shadow-primary/25">
+            <Link to="/signup">
+              Create Your Free Account
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <span>CitizenOS — Civic engagement for everyone</span>
-          <div className="flex gap-6">
-            <Link to="/login" className="hover:text-foreground transition-colors">Sign In</Link>
-            <Link to="/signup" className="hover:text-foreground transition-colors">Sign Up</Link>
+      <footer className="border-t bg-card">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">CitizenOS</span>
+              <span className="text-border">|</span>
+              <span>Civic engagement for everyone</span>
+            </div>
+            <div className="flex gap-6">
+              <Link to="/login" className="hover:text-foreground transition-colors">Sign In</Link>
+              <Link to="/signup" className="hover:text-foreground transition-colors">Sign Up</Link>
+              <Link to="/map" className="hover:text-foreground transition-colors">Map</Link>
+            </div>
           </div>
         </div>
       </footer>

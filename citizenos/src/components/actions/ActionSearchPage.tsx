@@ -75,8 +75,11 @@ export default function ActionSearchPage() {
 
   return (
     <PageWrapper>
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Filter className="h-6 w-6 text-primary" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Filter className="h-5 w-5 text-primary" />
+        </div>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Government Actions</h1>
           <p className="text-sm text-muted-foreground">
@@ -87,63 +90,65 @@ export default function ActionSearchPage() {
 
       <div className="flex flex-col gap-4">
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search actions..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              className="pl-9 h-9"
-            />
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search actions..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="pl-9 h-10"
+              />
+            </div>
+
+            <Select value={type} onValueChange={(v) => setType(v === '__all__' ? '' : v)}>
+              <SelectTrigger className="w-[160px] h-10">
+                <SelectValue placeholder="Action Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Types</SelectItem>
+                {TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={category} onValueChange={(v) => setCategory(v === '__all__' ? '' : v)}>
+              <SelectTrigger className="w-[160px] h-10">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Categories</SelectItem>
+                {CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={persona} onValueChange={(v) => setPersona(v === '__all__' ? '' : v)}>
+              <SelectTrigger className="w-[150px] h-10">
+                <SelectValue placeholder="Who it affects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Everyone</SelectItem>
+                {PERSONAS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button onClick={handleSearch} className="h-10">
+              Search
+            </Button>
           </div>
-
-          <Select value={type} onValueChange={(v) => setType(v === '__all__' ? '' : v)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Action Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Types</SelectItem>
-              {TYPE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={category} onValueChange={(v) => setCategory(v === '__all__' ? '' : v)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Categories</SelectItem>
-              {CATEGORIES.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={persona} onValueChange={(v) => setPersona(v === '__all__' ? '' : v)}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Who it affects" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Everyone</SelectItem>
-              {PERSONAS.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button size="sm" onClick={handleSearch} className="h-9">
-            Search
-          </Button>
         </div>
 
         {/* Loading skeleton */}

@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Sparkles, Clock, Scale, MessageSquare, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
 import PageWrapper from '@/components/layout/PageWrapper'
 import { useActionStore } from '@/stores/useActionStore'
 import ActionHeader from './ActionHeader'
@@ -35,13 +34,34 @@ function DetailSkeleton() {
         ))}
       </div>
 
-      <div className="rounded-xl border p-6 space-y-3">
+      <div className="rounded-2xl bg-muted/30 p-6 space-y-3">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-2/3" />
       </div>
     </div>
+  )
+}
+
+interface SectionProps {
+  icon: React.ElementType
+  title: string
+  children: React.ReactNode
+  className?: string
+}
+
+function Section({ icon: Icon, title, children, className = '' }: SectionProps) {
+  return (
+    <section className={`rounded-2xl bg-card border border-border/50 overflow-hidden ${className}`}>
+      <div className="flex items-center gap-2.5 px-6 pt-6 pb-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">{title}</h2>
+      </div>
+      <div className="px-6 pb-6">{children}</div>
+    </section>
   )
 }
 
@@ -64,57 +84,55 @@ export default function ActionDetailPage() {
       <Button
         variant="ghost"
         size="sm"
-        className="mb-4 gap-1.5 -ml-2 text-muted-foreground hover:text-foreground"
+        className="mb-4 gap-1.5 -ml-2 text-muted-foreground hover:text-foreground group"
         onClick={() => navigate('/actions')}
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
         Back to Actions
       </Button>
 
       {isLoading || !selectedAction ? (
         <DetailSkeleton />
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           {/* Header */}
           <ActionHeader action={selectedAction} />
 
-          {/* AI Summary */}
-          <div className="rounded-xl border bg-card p-6">
-            <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-              AI Summary
-            </h2>
+          {/* AI Summary — glassmorphism-inspired card */}
+          <Section icon={Sparkles} title="AI Summary">
             <p className="text-sm leading-relaxed text-foreground/90">
               {selectedAction.summary_ai}
             </p>
-          </div>
+          </Section>
 
           {/* Timeline */}
           {selectedAction.timeline.length > 0 && (
-            <div className="rounded-xl border bg-card p-6">
-              <h2 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Timeline
-              </h2>
+            <Section icon={Clock} title="Timeline">
               <ActionTimeline events={selectedAction.timeline} />
-            </div>
+            </Section>
           )}
 
-          <Separator />
-
           {/* Impact panel */}
-          <ActionImpactPanel actionId={selectedAction.id} />
-
-          <Separator />
+          <div className="rounded-2xl bg-muted/30 p-6">
+            <ActionImpactPanel actionId={selectedAction.id} />
+          </div>
 
           {/* Legal challenges */}
-          <LegalChallenges challenges={selectedAction.legal_challenges} />
+          {selectedAction.legal_challenges.length > 0 && (
+            <Section icon={Scale} title="Legal Challenges">
+              <LegalChallenges challenges={selectedAction.legal_challenges} />
+            </Section>
+          )}
 
           {/* Chat */}
-          <ActionChat actionId={selectedAction.id} />
-
-          <Separator />
+          <Section icon={MessageSquare} title="Ask About This Action">
+            <ActionChat actionId={selectedAction.id} />
+          </Section>
 
           {/* Related actions */}
-          <RelatedActions actionId={selectedAction.id} />
+          <Section icon={Link2} title="Related Actions">
+            <RelatedActions actionId={selectedAction.id} />
+          </Section>
         </div>
       )}
     </PageWrapper>

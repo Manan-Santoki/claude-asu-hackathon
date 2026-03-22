@@ -27,10 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { AlertCircle, Loader2, MapPin, UserCog, Home, Tags, Check } from 'lucide-react'
 
-const STEPS = ['Location', 'Background', 'Life Situation', 'Issues'] as const
-
-// --- Chip toggle helper ---
+const STEPS = [
+  { label: 'Location', icon: MapPin },
+  { label: 'Background', icon: UserCog },
+  { label: 'Life Situation', icon: Home },
+  { label: 'Issues', icon: Tags },
+] as const
 
 function ChipToggle({
   label,
@@ -45,18 +49,17 @@ function ChipToggle({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-medium border transition-colors cursor-pointer ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium border transition-all duration-150 cursor-pointer ${
         selected
-          ? 'bg-primary text-primary-foreground border-primary'
-          : 'bg-background text-foreground border-border hover:bg-accent'
+          ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+          : 'bg-background text-foreground border-border hover:bg-muted hover:border-muted-foreground/30'
       }`}
     >
+      {selected && <Check className="h-3.5 w-3.5" />}
       {label}
     </button>
   )
 }
-
-// --- Main component ---
 
 export default function OnboardingFlow() {
   const navigate = useNavigate()
@@ -94,13 +97,11 @@ export default function OnboardingFlow() {
     )
   }
 
-  // All steps are optional except we need at least something useful
   function canProceed(): boolean {
     if (step === 0) return !!stateCode
     return true
   }
 
-  // Build personas from the structured data for backward compatibility
   function buildPersonas(): string[] {
     const personas: string[] = []
     if (['f1', 'f2', 'j1', 'j2', 'opt', 'cpt'].includes(visaStatus)) personas.push('student')
@@ -114,7 +115,6 @@ export default function OnboardingFlow() {
     if (household.includes('parent')) personas.push('parent')
     if (household.includes('small_business')) personas.push('small_business')
     if (household.includes('uninsured')) personas.push('healthcare_worker')
-    // Deduplicate
     return [...new Set(personas)]
   }
 
@@ -156,224 +156,279 @@ export default function OnboardingFlow() {
     navigate('/')
   }
 
+  const StepIcon = STEPS[step].icon
+
   return (
     <PageWrapper className="flex items-center justify-center min-h-[80vh]">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Personalize CitizenOS</CardTitle>
-          <CardDescription>
-            Tell us about yourself so we can show you the bills, orders, and policies that directly affect your life. You can skip this and complete it later.
-          </CardDescription>
-          {/* Step indicator */}
-          <div className="flex justify-center gap-2 pt-3">
-            {STEPS.map((label, i) => (
-              <div
-                key={label}
-                className={`h-2 flex-1 max-w-16 rounded-full transition-colors ${
-                  i <= step ? 'bg-primary' : 'bg-muted'
-                }`}
-              />
-            ))}
+      <div className="w-full max-w-lg">
+        {/* Step indicator */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            {STEPS.map((s, i) => {
+              const Icon = s.icon
+              const isActive = i === step
+              const isDone = i < step
+              return (
+                <div key={s.label} className="flex flex-col items-center gap-1.5 flex-1">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+                      isDone
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : isActive
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground'
+                    }`}
+                  >
+                    {isDone ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                  </div>
+                  <span
+                    className={`text-xs font-medium hidden sm:block ${
+                      isActive ? 'text-primary' : isDone ? 'text-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+              )
+            })}
           </div>
-          <p className="text-xs text-muted-foreground pt-1">
-            Step {step + 1} of {STEPS.length} — {STEPS[step]}
-          </p>
-        </CardHeader>
-
-        <CardContent className="min-h-[320px]">
-          {error && (
-            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive mb-4">
-              {error}
-            </div>
-          )}
-
-          {/* Step 1: Location */}
-          {step === 0 && (
-            <div className="flex flex-col gap-5">
-              <h3 className="text-lg font-semibold">Where do you live?</h3>
-              <p className="text-sm text-muted-foreground -mt-3">
-                We'll show you state-specific legislation, your representatives, and local candidates.
-              </p>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">State</label>
-                <Select value={stateCode} onValueChange={setStateCode}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select your state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {US_STATES.map((s) => (
-                      <SelectItem key={s.code} value={s.code}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Zip Code (optional)</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. 85281"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                  maxLength={5}
-                  inputMode="numeric"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Helps us find your exact congressional district.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Background */}
-          {step === 1 && (
-            <div className="flex flex-col gap-5">
-              <h3 className="text-lg font-semibold">Your background</h3>
-              <p className="text-sm text-muted-foreground -mt-3">
-                This helps us surface government actions that directly impact you. For example, H-1B visa holders see fee changes and immigration rules; students see financial aid and visa policies.
-              </p>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Immigration / Citizenship Status</label>
-                <Select value={visaStatus} onValueChange={setVisaStatus}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VISA_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Employment Status</label>
-                <Select value={employmentStatus} onValueChange={setEmploymentStatus}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select employment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {EMPLOYMENT_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Age Group</label>
-                <Select value={ageGroup} onValueChange={setAgeGroup}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select age range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AGE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                All fields are optional. Select "Prefer not to say" to skip any.
-              </p>
-            </div>
-          )}
-
-          {/* Step 3: Life situation */}
-          {step === 2 && (
-            <div className="flex flex-col gap-5">
-              <h3 className="text-lg font-semibold">Your life situation</h3>
-              <p className="text-sm text-muted-foreground -mt-3">
-                Select anything that applies. This helps us highlight policies on housing, healthcare, education costs, and benefits that matter to you.
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                {HOUSEHOLD_OPTIONS.map((opt) => (
-                  <ChipToggle
-                    key={opt.id}
-                    label={opt.label}
-                    selected={household.includes(opt.id)}
-                    onClick={() => toggleHousehold(opt.id)}
-                  />
-                ))}
-              </div>
-
-              {household.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {household.length} selected
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Step 4: Policy interests */}
-          {step === 3 && (
-            <div className="flex flex-col gap-5">
-              <h3 className="text-lg font-semibold">What issues matter to you?</h3>
-              <p className="text-sm text-muted-foreground -mt-3">
-                Pick the policy areas you want to follow. We'll prioritize bills and actions in these areas.
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((category) => (
-                  <ChipToggle
-                    key={category.id}
-                    label={category.label}
-                    selected={selectedCategories.includes(category.id)}
-                    onClick={() => toggleCategory(category.id)}
-                  />
-                ))}
-              </div>
-
-              {selectedCategories.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {selectedCategories.length} selected
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-
-        <CardFooter className="flex justify-between">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={step === 0}
-            >
-              Back
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={handleSkipAll}
-              className="text-muted-foreground"
-            >
-              Skip for now
-            </Button>
+          {/* Progress bar */}
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+            />
           </div>
-          <Button
-            onClick={handleNext}
-            disabled={!canProceed() || loading}
-          >
-            {step === STEPS.length - 1
-              ? loading
-                ? 'Saving...'
-                : 'Finish Setup'
-              : 'Next'}
-          </Button>
-        </CardFooter>
-      </Card>
+        </div>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <StepIcon className="h-4.5 w-4.5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Personalize CitizenOS</CardTitle>
+                <CardDescription className="text-xs">
+                  Step {step + 1} of {STEPS.length} — {STEPS[step].label}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="min-h-[300px]">
+            {error && (
+              <div className="flex items-start gap-3 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive mb-4" role="alert">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Step 1: Location */}
+            {step === 0 && (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-semibold">Where do you live?</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    We'll show you state-specific legislation, your representatives, and local candidates.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">State <span className="text-destructive">*</span></label>
+                  <Select value={stateCode} onValueChange={setStateCode}>
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Select your state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Zip Code <span className="text-muted-foreground font-normal">(optional)</span></label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. 85281"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    maxLength={5}
+                    inputMode="numeric"
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Helps us find your exact congressional district.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Background */}
+            {step === 1 && (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-semibold">Your background</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This helps us surface government actions that directly impact you.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Immigration / Citizenship Status</label>
+                  <Select value={visaStatus} onValueChange={setVisaStatus}>
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VISA_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Employment Status</label>
+                  <Select value={employmentStatus} onValueChange={setEmploymentStatus}>
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Select employment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMPLOYMENT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Age Group</label>
+                  <Select value={ageGroup} onValueChange={setAgeGroup}>
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Select age range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  All fields are optional. Select "Prefer not to say" to skip any.
+                </p>
+              </div>
+            )}
+
+            {/* Step 3: Life situation */}
+            {step === 2 && (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-semibold">Your life situation</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Select anything that applies. This helps us highlight relevant policies.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {HOUSEHOLD_OPTIONS.map((opt) => (
+                    <ChipToggle
+                      key={opt.id}
+                      label={opt.label}
+                      selected={household.includes(opt.id)}
+                      onClick={() => toggleHousehold(opt.id)}
+                    />
+                  ))}
+                </div>
+
+                {household.length > 0 && (
+                  <p className="text-sm text-primary font-medium">
+                    {household.length} selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Step 4: Policy interests */}
+            {step === 3 && (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-semibold">What issues matter to you?</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pick the policy areas you want to follow. We'll prioritize bills and actions in these areas.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map((category) => (
+                    <ChipToggle
+                      key={category.id}
+                      label={category.label}
+                      selected={selectedCategories.includes(category.id)}
+                      onClick={() => toggleCategory(category.id)}
+                    />
+                  ))}
+                </div>
+
+                {selectedCategories.length > 0 && (
+                  <p className="text-sm text-primary font-medium">
+                    {selectedCategories.length} selected
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+
+          <CardFooter className="flex justify-between border-t pt-4">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                disabled={step === 0}
+              >
+                Back
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleSkipAll}
+                className="text-muted-foreground"
+              >
+                Skip for now
+              </Button>
+            </div>
+            <Button
+              onClick={handleNext}
+              disabled={!canProceed() || loading}
+              className="min-w-[120px]"
+            >
+              {step === STEPS.length - 1 ? (
+                loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Finish Setup'
+                )
+              ) : (
+                'Next'
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
     </PageWrapper>
   )
 }

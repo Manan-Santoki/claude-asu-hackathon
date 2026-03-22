@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { AlertCircle, Loader2, Mail } from 'lucide-react'
 
 function GoogleIcon() {
   return (
@@ -74,137 +75,154 @@ export default function SignupForm() {
   if (requiresEmailVerification) {
     return (
       <PageWrapper className="flex items-center justify-center min-h-[80vh]">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription>
-              We sent a verification code to <strong>{email}</strong>. Enter it to activate your account.
-            </CardDescription>
-          </CardHeader>
-          <CardFooter className="justify-center">
-            <p className="text-sm text-muted-foreground">
-              Already verified?{' '}
-              <Link to="/login" className="font-medium text-primary hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </CardFooter>
-        </Card>
+        <div className="w-full max-w-md text-center">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-6">
+            <Mail className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight mb-2">Check your email</h1>
+          <p className="text-muted-foreground mb-8">
+            We sent a verification link to <strong className="text-foreground">{email}</strong>.
+            Click it to activate your account.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Already verified?{' '}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </PageWrapper>
     )
   }
 
   return (
     <PageWrapper className="flex items-center justify-center min-h-[80vh]">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Create your account</CardTitle>
-          <CardDescription>Get started with CitizenOS</CardDescription>
-        </CardHeader>
+      <div className="w-full max-w-md">
+        {/* Brand header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold mb-4">
+            C
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
+          <p className="text-muted-foreground mt-1">Get started with CitizenOS — it's free</p>
+        </div>
 
-        <CardContent>
-          <div className="flex flex-col gap-3">
+        <Card className="shadow-sm">
+          <CardContent className="pt-6">
             {error && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                {error}
+              <div className="flex items-start gap-3 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive mb-4" role="alert">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
-            {/* OAuth buttons */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-3"
-              onClick={handleGoogleSignup}
-              disabled={loading}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </Button>
+            <div className="flex flex-col gap-3">
+              {/* OAuth buttons */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-3 h-11 transition-all hover:bg-muted/80"
+                onClick={handleGoogleSignup}
+                disabled={loading}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-3"
-              onClick={handleGitHubSignup}
-              disabled={loading}
-            >
-              <GitHubIcon />
-              Continue with GitHub
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-3 h-11 transition-all hover:bg-muted/80"
+                onClick={handleGitHubSignup}
+                disabled={loading}
+              >
+                <GitHubIcon />
+                Continue with GitHub
+              </Button>
 
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-3 text-muted-foreground">or continue with email</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or continue with email</span>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Name
+                </label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                  className="h-11 transition-colors"
+                />
               </div>
-            </div>
-          </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="name" className="text-sm font-medium">
-                Name
-              </label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoComplete="name"
-              />
-            </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="h-11 transition-colors"
+                />
+              </div>
 
-            <div className="flex flex-col gap-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Create a password (min. 6 characters)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  className="h-11 transition-colors"
+                />
+              </div>
 
-            <div className="flex flex-col gap-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create a password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
+              <Button type="submit" className="w-full h-11 mt-1 shadow-sm" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create account'
+                )}
+              </Button>
+            </form>
+          </CardContent>
 
-            <Button type="submit" className="w-full mt-2" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create account'}
-            </Button>
-          </form>
-        </CardContent>
-
-        <CardFooter className="justify-center">
-          <p className="text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </CardFooter>
-      </Card>
+          <CardFooter className="justify-center pb-6">
+            <p className="text-sm text-muted-foreground">
+              Already have an account?{' '}
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
+      </div>
     </PageWrapper>
   )
 }

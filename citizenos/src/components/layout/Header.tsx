@@ -52,10 +52,10 @@ function NavTabs({ onClick }: { onClick?: () => void }) {
           to={item.to}
           onClick={onClick}
           className={({ isActive }) =>
-            `px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+            `relative px-3 py-2 text-sm font-medium rounded-md transition-colors ${
               isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`
           }
         >
@@ -95,7 +95,7 @@ function UserMenu() {
 
   if (!isAuthenticated) {
     return (
-      <Button variant="outline" size="sm" onClick={() => navigate('/login')}>
+      <Button size="sm" onClick={() => navigate('/login')}>
         Login
       </Button>
     )
@@ -165,8 +165,11 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <NavLink to="/" className="flex items-center gap-2 font-bold text-lg shrink-0">
-          CitizenOS
+        <NavLink to="/" className="flex items-center gap-2 font-bold text-lg shrink-0 group">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold transition-transform group-hover:scale-105">
+            C
+          </div>
+          <span className="bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">CitizenOS</span>
         </NavLink>
 
         {/* Desktop Nav */}
