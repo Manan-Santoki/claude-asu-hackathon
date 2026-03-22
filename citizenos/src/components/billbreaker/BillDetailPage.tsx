@@ -9,8 +9,7 @@ import { useBillStore } from '@/stores/useBillStore'
 import BillHeader from './BillHeader'
 import StatusTimeline from './StatusTimeline'
 import AISummary from './AISummary'
-import PersonaSelector from './PersonaSelector'
-import ImpactPanel from './ImpactPanel'
+import BillImpactSection from './BillImpactSection'
 import ImpactStory from './ImpactStory'
 import BillChat from './BillChat'
 import RepsVoted from './RepsVoted'
@@ -112,11 +111,7 @@ export default function BillDetailPage() {
           <Separator />
 
           {/* Persona impact section */}
-          <div className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">How does this affect you?</h2>
-            <PersonaSelector billId={selectedBill.id} />
-            <ImpactPanel />
-          </div>
+          <BillImpactSection billId={selectedBill.id} />
 
           {/* Impact story */}
           <ImpactStory billId={selectedBill.id} />

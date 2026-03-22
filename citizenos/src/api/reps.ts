@@ -586,19 +586,76 @@ const MOCK_SPONSORED_BILLS: Record<string, SponsoredBill[]> = {
 // Score computation (unchanged — works with whatever promise data we have)
 // ---------------------------------------------------------------------------
 
-function computeScores(memberId: string, reps: Representative[], promises: CampaignPromise[]): RepScores {
+function computeScores(
+  memberId: string,
+  reps: Representative[],
+  promises: CampaignPromise[],
+  votes: RepVote[]
+): RepScores {
   const rep = reps.find((r) => r.member_id === memberId)
+  const mockRep = MOCK_REPS.find((r) => r.member_id === memberId)
   const memberPromises = promises.filter((p) => p.member_id === memberId)
+  const memberVotes = votes.filter((v) => v.member_id === memberId)
 
+  // --- Promise alignment ---
   const kept = memberPromises.filter((p) => p.status === 'kept').length
   const broken = memberPromises.filter((p) => p.status === 'broken').length
   const inProgress = memberPromises.filter((p) => p.status === 'in_progress').length
   const notAddressed = memberPromises.filter((p) => p.status === 'not_yet_addressed').length
+  const totalPromises = kept + broken + inProgress + notAddressed
   const scored = kept + broken + inProgress
   const promiseAlignment = scored > 0 ? Math.round(((kept * 1.0 + inProgress * 0.5) / scored) * 100) : 0
-  const partyLoyalty = rep?.votes_with_party_pct ?? 0
-  const attendance = rep ? Math.round(100 - rep.missed_votes_pct) : 0
-  const overall = Math.round(promiseAlignment * 0.5 + attendance * 0.3 + partyLoyalty * 0.2)
+
+  // --- Party loyalty: prefer live data, fall back to mock ---
+  let partyLoyalty = rep?.votes_with_party_pct ?? 0
+  if (partyLoyalty === 0 && mockRep) {
+    partyLoyalty = mockRep.votes_with_party_pct
+  }
+
+  // --- Attendance: derive from votes, fall back to mock ---
+  let attendance = 0
+  if (memberVotes.length > 0) {
+    const participated = memberVotes.filter((v) => v.vote_position !== 'Not Voting').length
+    attendance = Math.round((participated / memberVotes.length) * 100)
+  } else if (rep && rep.missed_votes_pct > 0) {
+    attendance = Math.round(100 - rep.missed_votes_pct)
+  } else if (mockRep) {
+    attendance = Math.round(100 - mockRep.missed_votes_pct)
+  }
+
+  // --- Overall accountability: weighted combination ---
+  // Only compute a meaningful score when we have actual data
+  const hasPromiseData = totalPromises > 0
+  const hasVoteData = partyLoyalty > 0 || attendance > 0
+  const hasActivityData = (rep?.bills_sponsored ?? 0) > 0 || (rep?.bills_cosponsored ?? 0) > 0
+
+  let overall: number
+  if (hasPromiseData && hasVoteData) {
+    // Full formula: promises (40%) + attendance (30%) + party loyalty (20%) + integrity bonus (10%)
+    const integrityBonus = broken === 0 ? 10 : Math.max(0, 10 - broken * 3)
+    overall = Math.round(promiseAlignment * 0.4 + attendance * 0.3 + partyLoyalty * 0.2 + integrityBonus)
+  } else if (hasVoteData) {
+    // No promise data — score based on voting record only
+    // Normalize: attendance & partyLoyalty are both typically 85-99%
+    // Apply penalty to make scores more differentiated (not everyone gets 95+)
+    const attendancePenalty = Math.max(0, 95 - attendance) * 1.5  // missing votes matters
+    const loyaltyPenalty = Math.max(0, 90 - partyLoyalty) * 0.5
+    const rawScore = attendance * 0.55 + partyLoyalty * 0.45
+    overall = Math.round(Math.max(20, rawScore - attendancePenalty - loyaltyPenalty))
+  } else if (hasActivityData) {
+    // No voting or promise data — estimate from legislative activity
+    // Cap at 65 since we don't have voting/attendance data — activity alone isn't accountability
+    const sponsored = rep?.bills_sponsored ?? 0
+    const cosponsored = rep?.bills_cosponsored ?? 0
+    // Use a tighter scale: 20-65 range based on productivity
+    const sponsorPoints = Math.min(20, sponsored * 2)       // max 20 pts for 10+ sponsored
+    const cosponsorPoints = Math.min(15, cosponsored * 0.3) // max 15 pts for 50+ cosponsored
+    const activityScore = Math.min(65, Math.round(20 + sponsorPoints + cosponsorPoints))
+    overall = activityScore
+  } else {
+    // No data at all — show 0 (unknown)
+    overall = 0
+  }
 
   return {
     member_id: memberId,
@@ -790,7 +847,9 @@ export async function getRepScore(memberId: string): Promise<RepScores> {
   } catch {
     reps = MOCK_REPS
   }
-  return computeScores(memberId, reps, MOCK_PROMISES)
+  // Get vote records for this member to derive attendance from actual votes
+  const memberVotes = MOCK_VOTES.filter((v) => v.member_id === memberId)
+  return computeScores(memberId, reps, MOCK_PROMISES, memberVotes)
 }
 
 export async function contactRep(
@@ -833,35 +892,56 @@ Sincerely,
   return { subject, body, mailto_link }
 }
 
+/** Infer a clean status from Congress.gov latestAction text */
+function inferBillStatus(actionText: string | undefined): string {
+  if (!actionText) return 'introduced'
+  const lower = actionText.toLowerCase()
+  if (lower.includes('became public law') || lower.includes('signed by president')) return 'enacted'
+  if (lower.includes('vetoed')) return 'vetoed'
+  if (lower.includes('passed senate') || lower.includes('agreed to in senate')) return 'passed_senate'
+  if (lower.includes('passed house') || lower.includes('agreed to in house')) return 'passed_house'
+  if (lower.includes('committee') || lower.includes('referred to') || lower.includes('reported by')) return 'in_committee'
+  return 'introduced'
+}
+
 export async function getRepBills(memberId: string): Promise<SponsoredBill[]> {
   try {
-    // Fetch both sponsored and cosponsored legislation in parallel
+    // Fetch sponsored and cosponsored legislation (limited to 10 each for speed)
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const [sponsoredData, cosponsoredData] = await Promise.all([
       congressFetch<{ sponsoredLegislation?: any[] }>(
-        `/member/${memberId}/sponsored-legislation?limit=20&offset=0`
+        `/member/${memberId}/sponsored-legislation?limit=10&offset=0&sort=updateDate+desc`
       ),
       congressFetch<{ cosponsoredLegislation?: any[] }>(
-        `/member/${memberId}/cosponsored-legislation?limit=20&offset=0`
+        `/member/${memberId}/cosponsored-legislation?limit=10&offset=0&sort=updateDate+desc`
       ),
     ])
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    const sponsored: SponsoredBill[] = (sponsoredData.sponsoredLegislation ?? []).map((bill: any) => ({
-      bill_id: bill.number ? `${(bill.type ?? '').toLowerCase()}${bill.number}-${bill.congress ?? CURRENT_CONGRESS}` : bill.url ?? '',
-      title: bill.title ?? bill.latestAction?.text ?? 'Untitled',
-      status: bill.latestAction?.text ?? 'unknown',
-      introduced_date: bill.introducedDate ?? '',
-      role: 'sponsor' as const,
-    }))
+    function mapBill(bill: any, role: 'sponsor' | 'cosponsor'): SponsoredBill | null {
+      const title = bill.title
+      // Skip bills with no title or meaningless titles
+      if (!title || title === 'Untitled' || title.trim().length < 5) return null
+      const type = (bill.type ?? '').toLowerCase()
+      const number = bill.number
+      if (!number) return null
 
-    const cosponsored: SponsoredBill[] = (cosponsoredData.cosponsoredLegislation ?? []).map((bill: any) => ({
-      bill_id: bill.number ? `${(bill.type ?? '').toLowerCase()}${bill.number}-${bill.congress ?? CURRENT_CONGRESS}` : bill.url ?? '',
-      title: bill.title ?? bill.latestAction?.text ?? 'Untitled',
-      status: bill.latestAction?.text ?? 'unknown',
-      introduced_date: bill.introducedDate ?? '',
-      role: 'cosponsor' as const,
-    }))
+      return {
+        bill_id: `${type}${number}-${bill.congress ?? CURRENT_CONGRESS}`,
+        title,
+        status: inferBillStatus(bill.latestAction?.text),
+        introduced_date: bill.introducedDate ?? '',
+        role,
+      }
+    }
+
+    const sponsored = (sponsoredData.sponsoredLegislation ?? [])
+      .map((b: any) => mapBill(b, 'sponsor'))
+      .filter((b): b is SponsoredBill => b !== null)
+
+    const cosponsored = (cosponsoredData.cosponsoredLegislation ?? [])
+      .map((b: any) => mapBill(b, 'cosponsor'))
+      .filter((b): b is SponsoredBill => b !== null)
 
     const combined = [...sponsored, ...cosponsored]
     return combined.length > 0 ? combined : (MOCK_SPONSORED_BILLS[memberId] ?? [])

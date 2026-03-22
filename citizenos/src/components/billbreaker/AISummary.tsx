@@ -12,7 +12,20 @@ export default function AISummary() {
 
   if (!selectedBill) return null
 
-  const text = showOriginal ? selectedBill.summary_raw : selectedBill.summary_ai
+  // Build a contextual fallback when no summary is available
+  const fallbackSummary = [
+    `${selectedBill.title}.`,
+    selectedBill.sponsor_name ? `Sponsored by ${selectedBill.sponsor_name} (${selectedBill.sponsor_party}-${selectedBill.sponsor_state}).` : '',
+    selectedBill.status_detail ? `Current status: ${selectedBill.status_detail}.` : `Status: ${selectedBill.status.replace(/_/g, ' ')}.`,
+    selectedBill.categories.length > 0 ? `Categories: ${selectedBill.categories.join(', ')}.` : '',
+    selectedBill.introduced_date ? `Introduced on ${selectedBill.introduced_date}.` : '',
+  ].filter(Boolean).join(' ')
+
+  // Fall back gracefully: summary_ai → summary_raw → contextual fallback
+  const aiText = selectedBill.summary_ai || selectedBill.summary_raw || fallbackSummary
+  const rawText = selectedBill.summary_raw || fallbackSummary
+  const text = showOriginal ? rawText : aiText
+  const hasSummary = !!(selectedBill.summary_ai || selectedBill.summary_raw)
 
   // Split summary by ## headers for structured rendering
   const renderFormattedText = (content: string) => {
@@ -57,7 +70,7 @@ export default function AISummary() {
           <CardTitle className="text-base">
             {showOriginal ? 'Original Summary' : 'AI Summary'}
           </CardTitle>
-          {!showOriginal && (
+          {!showOriginal && hasSummary && (
             <Badge
               variant="secondary"
               className="gap-1 bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"

@@ -6,7 +6,7 @@
 import { createClient } from 'npm:@insforge/sdk';
 
 const OPENSTATES_BASE = 'https://v3.openstates.org';
-const OPENSTATES_API_KEY = '35fc3e9e-3bb9-4c5b-8aa6-5489e9a32a1e';
+const OPENSTATES_API_KEY = Deno.env.get('OPENSTATES_API_KEY');
 
 const ALL_CODES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
