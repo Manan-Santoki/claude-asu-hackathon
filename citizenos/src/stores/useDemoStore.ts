@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { DemoPersona, DemoStep } from '@/lib/demoScripts'
 import { DEMO_PERSONAS } from '@/lib/demoScripts'
+import { useAuthStore } from './useAuthStore'
 
 export type DemoPhase = 'email' | 'picker' | 'playing' | 'cta'
 
@@ -16,7 +17,7 @@ interface DemoState {
   // Sequence playback
   currentStepIndex: number
   isAutoPlaying: boolean
-  playbackSpeed: 'normal' | 'fast'
+  playbackSpeed: 'slow' | 'normal' | 'fast'
 
   // Spotlight
   spotlightTarget: string | null
@@ -124,24 +125,37 @@ export const useDemoStore = create<DemoState>((set, get) => ({
     emailSent: false,
   }),
 
-  exitDemo: () => set({
-    isActive: false,
-    phase: 'email',
-    selectedPersona: null,
-    currentStepIndex: 0,
-    isAutoPlaying: true,
-    spotlightTarget: null,
-    narratorText: '',
-    isTransitioning: false,
-    transitionLabel: '',
-    cursorTarget: null,
-    cursorVisible: false,
-    cursorClicking: false,
-    showNotification: false,
-    notificationData: null,
-    showCheckEmail: false,
-    emailSent: false,
-  }),
+  exitDemo: () => {
+    // Force-logout the demo user immediately before clearing state
+    const authUser = useAuthStore.getState().user
+    if (authUser?.id?.startsWith('demo-')) {
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        profiles: [],
+        categories: [],
+      })
+    }
+
+    set({
+      isActive: false,
+      phase: 'email',
+      selectedPersona: null,
+      currentStepIndex: 0,
+      isAutoPlaying: true,
+      spotlightTarget: null,
+      narratorText: '',
+      isTransitioning: false,
+      transitionLabel: '',
+      cursorTarget: null,
+      cursorVisible: false,
+      cursorClicking: false,
+      showNotification: false,
+      notificationData: null,
+      showCheckEmail: false,
+      emailSent: false,
+    })
+  },
 
   setPhase: (phase) => set({ phase }),
 
@@ -213,7 +227,10 @@ export const useDemoStore = create<DemoState>((set, get) => ({
   },
 
   toggleAutoPlay: () => set(s => ({ isAutoPlaying: !s.isAutoPlaying })),
-  toggleSpeed: () => set(s => ({ playbackSpeed: s.playbackSpeed === 'normal' ? 'fast' : 'normal' })),
+  toggleSpeed: () => set(s => {
+    const cycle: Record<string, 'slow' | 'normal' | 'fast'> = { slow: 'normal', normal: 'fast', fast: 'slow' }
+    return { playbackSpeed: cycle[s.playbackSpeed] ?? 'normal' }
+  }),
 
   setSpotlight: (selector) => set({ spotlightTarget: selector }),
   setNarrator: (text) => set({ narratorText: text }),

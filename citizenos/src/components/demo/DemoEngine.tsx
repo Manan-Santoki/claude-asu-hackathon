@@ -54,6 +54,8 @@ export default function DemoEngine() {
   }, [isActive, selectedPersona]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Restore stores on demo exit ──────────────────────────────────────
+  // Note: demo user logout is handled in useDemoStore.exitDemo() directly,
+  // since DemoEngine unmounts when isActive becomes false.
   useEffect(() => {
     if (!isActive) {
       restoreStores()
@@ -75,9 +77,12 @@ export default function DemoEngine() {
     if (step.route && step.route !== location.pathname) {
       if (step.transition) {
         useDemoStore.getState().startTransition(step.transition)
-        baseDelay = 900 // Wait for transition to finish
+        baseDelay = 2600 // Wait for transition to finish (title holds for ~1.6s)
       }
-      addTimer(() => navigate(step.route!), step.transition ? 400 : 0)
+      addTimer(() => {
+        navigate(step.route!)
+        window.scrollTo({ top: 0, behavior: 'instant' })
+      }, step.transition ? 400 : 0)
     }
 
     // 2. Map actions
@@ -99,11 +104,15 @@ export default function DemoEngine() {
       addTimer(() => {
         const el = document.querySelector(step.cursorTarget!)
         if (el) {
-          const rect = el.getBoundingClientRect()
-          useDemoStore.getState().moveCursor(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2
-          )
+          scrollIntoDemo(el)
+          // Slight delay to let scroll settle before positioning cursor
+          setTimeout(() => {
+            const rect = el.getBoundingClientRect()
+            useDemoStore.getState().moveCursor(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2
+            )
+          }, 300)
         }
       }, baseDelay + 500)
 
@@ -123,7 +132,7 @@ export default function DemoEngine() {
     if (step.scroll) {
       addTimer(() => {
         const el = document.querySelector(step.scroll!)
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (el) scrollIntoDemo(el)
       }, baseDelay + 600)
     }
 
@@ -133,7 +142,7 @@ export default function DemoEngine() {
         useDemoStore.getState().setSpotlight(step.spotlight!)
         // Also scroll spotlight target into view
         const el = document.querySelector(step.spotlight!)
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (el) scrollIntoDemo(el)
       }, baseDelay + 800)
     }
 
@@ -201,7 +210,8 @@ export default function DemoEngine() {
     const step = useDemoStore.getState().getCurrentStep()
     if (!step?.autoAdvanceAfter) return
 
-    const delay = playbackSpeed === 'fast' ? step.autoAdvanceAfter * 0.5 : step.autoAdvanceAfter
+    const multiplier = playbackSpeed === 'fast' ? 0.5 : playbackSpeed === 'slow' ? 2 : 1
+    const delay = step.autoAdvanceAfter * multiplier
     const timer = setTimeout(() => useDemoStore.getState().nextStep(), delay)
     return () => clearTimeout(timer)
   }, [isActive, phase, selectedPersona, currentStepIndex]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -242,6 +252,29 @@ export default function DemoEngine() {
   }, [isActive])
 
   return null
+}
+
+// ─── Helper: Scroll element into the visible demo area ──────────────────────
+// Accounts for the progress rail at the top (~50px) and narrator bar at the
+// bottom (~120px) so the element is centered in the remaining viewport.
+
+function scrollIntoDemo(el: Element) {
+  const topOffset = 70    // header height (~64px) + padding
+  const bottomOffset = 150 // narrator bar + step dots height
+  const rect = el.getBoundingClientRect()
+  const viewportH = window.innerHeight
+  const visibleTop = topOffset
+  const visibleBottom = viewportH - bottomOffset
+  const visibleCenter = (visibleTop + visibleBottom) / 2
+  const elCenter = rect.top + rect.height / 2
+
+  // Only scroll if the element is outside the visible area
+  if (rect.top < visibleTop || rect.bottom > visibleBottom) {
+    window.scrollBy({
+      top: elCenter - visibleCenter,
+      behavior: 'smooth',
+    })
+  }
 }
 
 // ─── Helper: Inject persona state into app stores ───────────────────────────

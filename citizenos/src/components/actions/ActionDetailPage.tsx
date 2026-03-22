@@ -12,6 +12,7 @@ import ActionImpactPanel from './ActionImpactPanel'
 import ActionChat from './ActionChat'
 import LegalChallenges from './LegalChallenges'
 import RelatedActions from './RelatedActions'
+import CommentSection from '@/components/shared/CommentSection'
 
 function DetailSkeleton() {
   return (
@@ -110,6 +111,11 @@ export default function ActionDetailPage() {
 
           {/* Chat */}
           <ActionChat actionId={selectedAction.id} />
+
+          <Separator />
+
+          {/* Community discussion */}
+          <CommentSection contentType="action" contentId={selectedAction.id} />
 
           <Separator />
 
