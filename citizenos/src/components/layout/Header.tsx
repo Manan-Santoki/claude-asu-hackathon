@@ -21,15 +21,27 @@ import {
 } from '@/components/ui/sheet'
 import NotificationBell from '@/components/billbreaker/NotificationBell'
 
-const navItems = [
-  { to: '/', label: 'Map' },
-  { to: '/bill/latest', label: 'BillBreaker' },
-  { to: '/reps', label: 'RepScore' },
-  { to: '/actions', label: 'Actions' },
-  { to: '/vote', label: 'VoteMap' },
-]
-
 function NavTabs({ onClick }: { onClick?: () => void }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  const navItems = isAuthenticated
+    ? [
+        { to: '/dashboard', label: 'Dashboard' },
+        { to: '/map', label: 'Map' },
+        { to: '/bill/latest', label: 'BillBreaker' },
+        { to: '/reps', label: 'RepScore' },
+        { to: '/actions', label: 'Actions' },
+        { to: '/vote', label: 'VoteMap' },
+      ]
+    : [
+        { to: '/', label: 'Home' },
+        { to: '/map', label: 'Map' },
+        { to: '/bill/latest', label: 'BillBreaker' },
+        { to: '/reps', label: 'RepScore' },
+        { to: '/actions', label: 'Actions' },
+        { to: '/vote', label: 'VoteMap' },
+      ]
+
   return (
     <>
       {navItems.map((item) => (

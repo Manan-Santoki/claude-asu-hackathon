@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 
 // Lazy-loaded route components
 const MapView = React.lazy(() => import('@/components/map/USAMap'))
+const LandingPage = React.lazy(() => import('@/components/layout/LandingPage'))
 const BillDetailPage = React.lazy(() => import('@/components/billbreaker/BillDetailPage'))
 const RepScoreDashboard = React.lazy(() => import('@/components/repscore/RepScoreDashboard'))
 const RepDetailPage = React.lazy(() => import('@/components/repscore/RepDetailPage'))
@@ -19,6 +20,11 @@ const VoteMapPage = React.lazy(() => import('@/components/votemap/VoteMapPage'))
 const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateDetail'))
 const ActionSearchPage = React.lazy(() => import('@/components/actions/ActionSearchPage'))
 const ActionDetailPage = React.lazy(() => import('@/components/actions/ActionDetailPage'))
+
+function HomePage() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  return isAuthenticated ? <MapView /> : <LandingPage />
+}
 
 function SettingsPage() {
   return (
@@ -60,7 +66,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<RootLayout />}>
-        <Route path="/" element={<MapView />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/map" element={<MapView />} />
         <Route path="/bill/:id" element={<BillDetailPage />} />
         <Route path="/reps" element={<RepScoreDashboard />} />
         <Route path="/rep/:memberId" element={<RepDetailPage />} />
