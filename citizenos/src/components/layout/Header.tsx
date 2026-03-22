@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Menu, X, LogOut, LayoutDashboard, Settings, Sun, Moon } from 'lucide-react'
+import { Menu, X, LogOut, LayoutDashboard, Settings, Sun, Moon, UserCog, User } from 'lucide-react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { Button } from '@/components/ui/button'
@@ -88,7 +88,7 @@ function ThemeToggle() {
 }
 
 function UserMenu() {
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, isAuthenticated, logout, hasCompletedOnboarding } = useAuthStore()
   const navigate = useNavigate()
 
   if (!isAuthenticated) {
@@ -123,10 +123,20 @@ function UserMenu() {
           <p className="text-xs text-muted-foreground">{user?.email}</p>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate('/profile')}>
+          <User className="mr-2 h-4 w-4" />
+          Profile
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate('/dashboard')}>
           <LayoutDashboard className="mr-2 h-4 w-4" />
           Dashboard
         </DropdownMenuItem>
+        {!hasCompletedOnboarding() && (
+          <DropdownMenuItem onClick={() => navigate('/onboarding')}>
+            <UserCog className="mr-2 h-4 w-4" />
+            Complete Profile
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={() => navigate('/settings')}>
           <Settings className="mr-2 h-4 w-4" />
           Settings

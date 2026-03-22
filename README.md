@@ -21,8 +21,8 @@ Take a policy quiz and get matched with candidates based on your values. Compare
 ### Interactive USA Map
 The home screen features a clickable SVG map of the United States. Click any state to explore bills, government actions, representatives, and candidates specific to that state through a slide-out panel with tabbed navigation.
 
-### Authentication
-Full authentication flow powered by InsForge with email/password login, Google and GitHub OAuth, email verification, and a 3-step onboarding wizard (select state, choose personas, pick issue categories).
+### Authentication & Personalization
+Full authentication flow powered by InsForge with email/password login, Google and GitHub OAuth, and email verification. A 4-step onboarding wizard collects your location, visa/citizenship status (F-1, H-1B, OPT, DACA, Green Card, etc.), employment, age, and life situation to personalize what you see. Onboarding is optional — users are reminded via a banner, notification, and menu item until completed. A dedicated profile page lets you view and edit all your details at any time.
 
 ## Tech Stack
 
@@ -110,13 +110,13 @@ claude-asu-hackathon/
 ├── citizenos/                  # Main React application
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── auth/           # Login, Signup, Onboarding (InsForge OAuth)
+│   │   │   ├── auth/           # Login, Signup, Onboarding, Profile (InsForge OAuth)
 │   │   │   ├── billbreaker/    # Bill analysis module
 │   │   │   ├── actions/        # Government Actions Tracker module
 │   │   │   ├── repscore/       # Representative tracking module
 │   │   │   ├── votemap/        # Candidate matching module
 │   │   │   ├── map/            # Interactive USA map
-│   │   │   ├── layout/         # Header, Dashboard, PageWrapper
+│   │   │   ├── layout/         # Header, Dashboard, LandingPage, OnboardingBanner, PageWrapper
 │   │   │   └── ui/             # shadcn/ui components
 │   │   ├── stores/             # Zustand state stores
 │   │   ├── api/                # API client layer (mock + InsForge)
@@ -134,7 +134,8 @@ claude-asu-hackathon/
 
 | Path | Page |
 |------|------|
-| `/` | Interactive USA Map (Home) |
+| `/` | Landing Page (logged out) / Map (logged in) |
+| `/map` | Interactive USA Map |
 | `/bill/:id` | Bill Detail |
 | `/actions` | Government Actions Search & Browse |
 | `/action/:id` | Action Detail (EO, rule, court ruling, etc.) |
@@ -143,10 +144,11 @@ claude-asu-hackathon/
 | `/vote` | VoteMap — Candidate Matching |
 | `/candidate/:id` | Candidate Detail |
 | `/dashboard` | User Dashboard |
+| `/profile` | User Profile (view & edit) |
 | `/settings` | Settings & Notification Preferences |
 | `/login` | Login |
 | `/signup` | Sign Up |
-| `/onboarding` | 3-Step Onboarding Wizard |
+| `/onboarding` | 4-Step Onboarding Wizard |
 
 ## Team
 

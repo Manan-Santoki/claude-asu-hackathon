@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
-import { CheckCheck } from 'lucide-react'
+import { CheckCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useNotifStore } from '@/stores/useNotifStore'
+import { useAuthStore } from '@/stores/useAuthStore'
 import type { Notification } from '@/api/notifications'
 
 const IMPACT_BORDER: Record<string, string> = {
@@ -70,13 +71,37 @@ function NotificationItem({
   )
 }
 
+function OnboardingNotification({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-start gap-3 border-l-4 border-l-primary px-4 py-3 text-left transition-colors hover:bg-accent"
+    >
+      <div className="mt-0.5 shrink-0">
+        <Sparkles className="h-4 w-4 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium leading-tight">
+          Complete your profile
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+          Tell us your visa status, employment, and interests to see personalized bills and policies that affect you.
+        </p>
+      </div>
+    </button>
+  )
+}
+
 export default function NotificationDropdown() {
   const navigate = useNavigate()
   const notifications = useNotifStore((s) => s.notifications)
   const markRead = useNotifStore((s) => s.markRead)
   const markAllRead = useNotifStore((s) => s.markAllRead)
   const unreadCount = useNotifStore((s) => s.unreadCount)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const hasCompletedOnboarding = useAuthStore((s) => s.hasCompletedOnboarding)
 
+  const showOnboarding = isAuthenticated && !hasCompletedOnboarding()
   const recent = notifications.slice(0, 5)
 
   const handleClickNotification = (notif: Notification) => {
@@ -91,17 +116,25 @@ export default function NotificationDropdown() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <h3 className="text-sm font-semibold">Notifications</h3>
-        {unreadCount > 0 && (
+        {(unreadCount > 0 || showOnboarding) && (
           <span className="text-xs text-muted-foreground">
-            {unreadCount} unread
+            {unreadCount + (showOnboarding ? 1 : 0)} unread
           </span>
         )}
       </div>
 
       <Separator />
 
+      {/* Onboarding prompt */}
+      {showOnboarding && (
+        <>
+          <OnboardingNotification onClick={() => navigate('/onboarding')} />
+          <Separator />
+        </>
+      )}
+
       {/* List */}
-      {recent.length === 0 ? (
+      {recent.length === 0 && !showOnboarding ? (
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
           No notifications yet.
         </div>
