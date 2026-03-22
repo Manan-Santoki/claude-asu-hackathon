@@ -6,6 +6,11 @@ export interface User {
   name: string
   state_code?: string
   zip_code?: string
+  visa_status?: string
+  employment_status?: string
+  age_group?: string
+  household?: string[]
+  onboarding_completed?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -20,6 +25,11 @@ function mapUser(insforgeUser: { id: string; email: string; profile?: Record<str
     name: (profile.name as string) ?? '',
     state_code: (profile.state_code as string) ?? undefined,
     zip_code: (profile.zip_code as string) ?? undefined,
+    visa_status: (profile.visa_status as string) ?? undefined,
+    employment_status: (profile.employment_status as string) ?? undefined,
+    age_group: (profile.age_group as string) ?? undefined,
+    household: (profile.household as string[]) ?? undefined,
+    onboarding_completed: (profile.onboarding_completed as boolean) ?? false,
   }
 }
 
@@ -79,12 +89,21 @@ export async function getProfile(): Promise<{ user: User; profiles: string[]; ca
   }
 }
 
-export async function saveOnboarding(stateCode: string, zipCode: string, profiles: string[], categories: string[]) {
+export interface OnboardingData {
+  state_code: string
+  zip_code: string
+  personas: string[]
+  categories: string[]
+  visa_status?: string
+  employment_status?: string
+  age_group?: string
+  household?: string[]
+}
+
+export async function saveOnboarding(data: OnboardingData) {
   const { error } = await insforge.auth.setProfile({
-    state_code: stateCode,
-    zip_code: zipCode,
-    personas: profiles,
-    categories,
+    ...data,
+    onboarding_completed: true,
   })
   if (error) throw new Error(error.message ?? 'Failed to save onboarding')
 }

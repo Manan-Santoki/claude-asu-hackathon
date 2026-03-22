@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { User } from '@/api/auth'
+import type { User, OnboardingData } from '@/api/auth'
 import * as authApi from '@/api/auth'
 
 interface AuthState {
@@ -17,7 +17,7 @@ interface AuthState {
   setProfiles: (profiles: string[]) => void
   setCategories: (categories: string[]) => void
   loadProfile: () => Promise<void>
-  saveOnboarding: (stateCode: string, zipCode: string, profiles: string[], categories: string[]) => Promise<void>
+  saveOnboarding: (data: OnboardingData) => Promise<void>
   hasCompletedOnboarding: () => boolean
 }
 
@@ -93,11 +93,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hasCompletedOnboarding: () => {
     const { user } = get()
-    return !!user?.state_code
+    return !!user?.onboarding_completed
   },
 
-  saveOnboarding: async (stateCode, zipCode, profiles, categories) => {
-    await authApi.saveOnboarding(stateCode, zipCode, profiles, categories)
+  saveOnboarding: async (data) => {
+    await authApi.saveOnboarding(data)
     const profile = await authApi.getProfile()
     if (profile) {
       set({

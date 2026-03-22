@@ -2,6 +2,7 @@ import React, { Suspense, useEffect } from 'react'
 import { Routes, Route, Outlet } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import Header from '@/components/layout/Header'
+import OnboardingBanner from '@/components/layout/OnboardingBanner'
 import PageWrapper from '@/components/layout/PageWrapper'
 import NotifPreferences from '@/components/billbreaker/NotifPreferences'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -16,6 +17,7 @@ const Dashboard = React.lazy(() => import('@/components/layout/Dashboard'))
 const LoginForm = React.lazy(() => import('@/components/auth/LoginForm'))
 const SignupForm = React.lazy(() => import('@/components/auth/SignupForm'))
 const OnboardingFlow = React.lazy(() => import('@/components/auth/OnboardingFlow'))
+const ProfilePage = React.lazy(() => import('@/components/auth/ProfilePage'))
 const VoteMapPage = React.lazy(() => import('@/components/votemap/VoteMapPage'))
 const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateDetail'))
 const ActionSearchPage = React.lazy(() => import('@/components/actions/ActionSearchPage'))
@@ -49,6 +51,7 @@ function RootLayout() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
+      <OnboardingBanner />
       <Suspense fallback={<LoadingFallback />}>
         <Outlet />
       </Suspense>
@@ -76,6 +79,7 @@ export default function App() {
         <Route path="/actions" element={<ActionSearchPage />} />
         <Route path="/action/:id" element={<ActionDetailPage />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/login" element={<LoginForm />} />
         <Route path="/signup" element={<SignupForm />} />
