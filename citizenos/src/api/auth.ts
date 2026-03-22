@@ -75,11 +75,13 @@ export async function logout() {
 
 export async function getProfile(): Promise<{ user: User; profiles: string[]; categories: string[] } | null> {
   try {
-    const { data, error } = await insforge.auth.getCurrentUser()
-    if (error || !data?.user) return null
+    // Restore session first (handles OAuth code exchange + cookie refresh)
+    const { data: sessionData } = await insforge.auth.getCurrentSession()
+    if (!sessionData?.session?.user) return null
 
-    const user = mapUser(data.user)
-    const profile = (data.user as { profile?: Record<string, unknown> | null }).profile ?? {}
+    const raw = sessionData.session.user as { id: string; email: string; profile?: Record<string, unknown> | null }
+    const user = mapUser(raw)
+    const profile = raw.profile ?? {}
     const profiles: string[] = (profile.personas as string[]) ?? []
     const categories: string[] = (profile.categories as string[]) ?? []
 

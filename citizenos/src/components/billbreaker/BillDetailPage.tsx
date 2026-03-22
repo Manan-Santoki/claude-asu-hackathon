@@ -15,6 +15,7 @@ import ImpactStory from './ImpactStory'
 import BillChat from './BillChat'
 import RepsVoted from './RepsVoted'
 import BillActionBar from './BillActionBar'
+import CommentSection from '@/components/shared/CommentSection'
 
 function DetailSkeleton() {
   return (
@@ -124,6 +125,11 @@ export default function BillDetailPage() {
 
           {/* Chat */}
           <BillChat billId={selectedBill.id} />
+
+          <Separator />
+
+          {/* Community discussion */}
+          <CommentSection contentType="bill" contentId={selectedBill.id} />
 
           <Separator />
 
