@@ -34,6 +34,7 @@ function NavTabs({ onClick }: { onClick?: () => void }) {
         { to: '/reps', label: 'RepScore' },
         { to: '/actions', label: 'Actions' },
         { to: '/vote', label: 'VoteMap' },
+        { to: '/ledger', label: 'Ledger' },
       ]
     : [
         { to: '/', label: 'Home' },
@@ -42,6 +43,7 @@ function NavTabs({ onClick }: { onClick?: () => void }) {
         { to: '/reps', label: 'RepScore' },
         { to: '/actions', label: 'Actions' },
         { to: '/vote', label: 'VoteMap' },
+        { to: '/ledger', label: 'Ledger' },
       ]
 
   return (

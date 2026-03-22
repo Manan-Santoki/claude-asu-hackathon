@@ -101,7 +101,7 @@ export default function USAMap() {
         const stats = statsMap[state.code]
         const billCount = stats?.billCount ?? 0
         setTooltipContent(
-          `${state.name} — ${billCount.toLocaleString()} bills this year`
+          `${state.name} — ${billCount.toLocaleString()} state bills this year`
         )
       }
     },

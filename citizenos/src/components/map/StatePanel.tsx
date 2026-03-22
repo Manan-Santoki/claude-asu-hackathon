@@ -47,11 +47,11 @@ export default function StatePanel() {
               {partyLabel}
             </Badge>
           </SheetTitle>
-          <SheetDescription className="flex items-center gap-3">
+          <SheetDescription className="flex items-center gap-3 flex-wrap">
             <span>{state?.code}</span>
             {stats && (
               <span className="font-medium text-foreground">
-                {stats.billCount.toLocaleString()} bills this year
+                {stats.billCount.toLocaleString()} state legislature bills this year
               </span>
             )}
             <DataSourceBadge sourceKey="map" />
@@ -63,7 +63,7 @@ export default function StatePanel() {
         <div className="px-4 pb-4">
           <Tabs defaultValue="bills">
             <TabsList className="w-full">
-              <TabsTrigger value="bills">Bills</TabsTrigger>
+              <TabsTrigger value="bills">Federal Bills</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
               <TabsTrigger value="reps">Reps</TabsTrigger>
               <TabsTrigger value="candidates">Candidates</TabsTrigger>

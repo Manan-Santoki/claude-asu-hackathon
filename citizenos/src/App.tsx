@@ -24,6 +24,7 @@ const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateD
 const BillSearchPage = React.lazy(() => import('@/components/billbreaker/BillSearchPage'))
 const ActionSearchPage = React.lazy(() => import('@/components/actions/ActionSearchPage'))
 const ActionDetailPage = React.lazy(() => import('@/components/actions/ActionDetailPage'))
+const LedgerPage = React.lazy(() => import('@/components/ledger/LedgerPage'))
 
 function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/candidate/:id" element={<CandidateDetail />} />
         <Route path="/actions" element={<ActionSearchPage />} />
         <Route path="/action/:id" element={<ActionDetailPage />} />
+        <Route path="/ledger" element={<LedgerPage />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
