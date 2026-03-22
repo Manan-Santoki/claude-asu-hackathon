@@ -15,6 +15,7 @@ import {
   type CandidatePosition,
 } from '@/api/candidates'
 import ReputationCard from './ReputationCard'
+import InTheNews from '@/components/shared/InTheNews'
 import { ArrowLeft, ExternalLink, MapPin, Briefcase } from 'lucide-react'
 
 function getPartyColor(party: string): string {
@@ -146,6 +147,8 @@ export default function CandidateDetail() {
           </div>
         </div>
       </Card>
+
+      <InTheNews personId={candidate.id} personName={candidate.name} />
 
       {/* Policy Positions */}
       <Card className="p-6">
