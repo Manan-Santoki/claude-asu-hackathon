@@ -69,11 +69,21 @@ export const useActionStore = create<ActionState>((set, get) => ({
   fetchActions: async (filters) => {
     const currentFilters = get().filters
     const merged = { ...currentFilters, ...filters }
+    const page = merged.page ?? 1
     set({ isLoading: true, filters: merged })
 
     try {
       const result = await getActions(merged)
-      set({ actions: result.actions, totalActions: result.total, isLoading: false })
+      if (page > 1) {
+        // Append for "load more" — deduplicate by ID
+        const existing = get().actions
+        const existingIds = new Set(existing.map((a) => a.id))
+        const newActions = result.actions.filter((a) => !existingIds.has(a.id))
+        set({ actions: [...existing, ...newActions], totalActions: result.total, isLoading: false })
+      } else {
+        // Replace for fresh search / filter change
+        set({ actions: result.actions, totalActions: result.total, isLoading: false })
+      }
     } catch {
       set({ isLoading: false })
     }

@@ -35,25 +35,23 @@ export default function ActionSearchPage() {
   const [category, setCategory] = useState<string>('')
   const [persona, setPersona] = useState<string>('')
 
-  const loadActions = useCallback(
-    (page = 1) => {
-      fetchActions({
-        page,
-        type: (type || undefined) as ActionType | 'all' | undefined,
-        category: category || undefined,
-        persona: persona || undefined,
-        search: searchInput || undefined,
-      })
-    },
-    [fetchActions, type, category, persona, searchInput]
+  const buildFilters = useCallback(
+    (page: number) => ({
+      page,
+      type: (type || undefined) as ActionType | 'all' | undefined,
+      category: category || undefined,
+      persona: persona || undefined,
+      search: searchInput || undefined,
+    }),
+    [type, category, persona, searchInput]
   )
 
   useEffect(() => {
-    loadActions(1)
+    fetchActions(buildFilters(1))
   }, [type, category, persona]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = () => {
-    loadActions(1)
+    fetchActions(buildFilters(1))
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -62,13 +60,7 @@ export default function ActionSearchPage() {
 
   const handleLoadMore = () => {
     const nextPage = (filters.page ?? 1) + 1
-    fetchActions({
-      page: nextPage,
-      type: (type || undefined) as ActionType | 'all' | undefined,
-      category: category || undefined,
-      persona: persona || undefined,
-      search: searchInput || undefined,
-    })
+    fetchActions(buildFilters(nextPage))
   }
 
   const hasMore = actions.length < totalActions
