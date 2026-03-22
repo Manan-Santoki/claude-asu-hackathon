@@ -813,7 +813,9 @@ export async function getActions(filters: {
   setActionSource('loading')
   try {
     const page = filters.page ?? 1
-    const perPage = 10
+    const targetCount = 10
+    const needsClientFilter = !!(filters.category || filters.persona || filters.state ||
+      (filters.type && filters.type !== 'all'))
 
     // Determine document types based on action type filter
     let docTypes: string[] | undefined
@@ -823,42 +825,84 @@ export async function getActions(filters: {
       if (t) docTypes = [t]
     }
 
-    const searchUrl = buildSearchUrl(
-      { per_page: String(perPage), page: String(page), order: 'newest' },
-      docTypes,
-      filters.search,
-    )
+    // When client-side filters are active, the API can't filter by category/persona/state.
+    // We need to scan through many API pages to find enough matching results.
+    // Use a cursor-based approach: track which API page we left off at per logical page.
+    const apiPerPage = needsClientFilter ? 50 : targetCount
+    const maxApiScans = needsClientFilter ? 10 : 1 // scan up to 500 API results
+    const skipCount = needsClientFilter ? (page - 1) * targetCount : 0
+    const startApiPage = needsClientFilter ? 1 : page
 
-    const res = await fetch(searchUrl)
-    if (!res.ok) throw new Error(`API ${res.status}`)
-    const data = (await res.json()) as FedRegSearchResponse
+    const allMatching: GovernmentAction[] = []
+    let totalFromApi = 0
+    let apiExhausted = false
 
-    let actions = data.results.map(mapFedRegDocument)
+    for (let scan = 0; scan < maxApiScans; scan++) {
+      const currentApiPage = startApiPage + scan
 
-    // Cache results for detail lookups
-    for (const a of actions) {
-      liveActionsCache.set(a.id, a)
-    }
-
-    // Client-side filtering for fields Fed Reg doesn't support server-side
-    if (filters.type && filters.type !== 'all') {
-      // For PRESDOCU sub-types, the API returns all presidential docs — filter locally
-      actions = actions.filter((a) => a.action_type === filters.type)
-    }
-    if (filters.category) {
-      actions = actions.filter((a) => a.categories.includes(filters.category!))
-    }
-    if (filters.persona) {
-      actions = actions.filter((a) => a.affected_personas.includes(filters.persona!))
-    }
-    if (filters.state) {
-      actions = actions.filter(
-        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
+      const searchUrl = buildSearchUrl(
+        { per_page: String(apiPerPage), page: String(currentApiPage), order: 'newest' },
+        docTypes,
+        filters.search,
       )
+
+      const res = await fetch(searchUrl)
+      if (!res.ok) throw new Error(`API ${res.status}`)
+      const data = (await res.json()) as FedRegSearchResponse
+      totalFromApi = data.count ?? 0
+
+      if (data.results.length === 0) {
+        apiExhausted = true
+        break
+      }
+
+      let batch = data.results.map(mapFedRegDocument)
+
+      // Cache results for detail lookups
+      for (const a of batch) {
+        liveActionsCache.set(a.id, a)
+      }
+
+      // Client-side filtering for fields Fed Reg doesn't support server-side
+      if (filters.type && filters.type !== 'all') {
+        batch = batch.filter((a) => a.action_type === filters.type)
+      }
+      if (filters.category) {
+        batch = batch.filter((a) => a.categories.includes(filters.category!))
+      }
+      if (filters.persona) {
+        batch = batch.filter((a) => a.affected_personas.includes(filters.persona!))
+      }
+      if (filters.state) {
+        batch = batch.filter(
+          (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
+        )
+      }
+
+      allMatching.push(...batch)
+
+      // Stop if we have enough results (including ones to skip for pagination)
+      if (allMatching.length >= skipCount + targetCount) break
+
+      // Stop if API returned fewer results than requested (last page)
+      if (data.results.length < apiPerPage) {
+        apiExhausted = true
+        break
+      }
     }
+
+    // For "load more" pagination with client filters, skip previously shown results
+    const actions = needsClientFilter
+      ? allMatching.slice(skipCount, skipCount + targetCount)
+      : allMatching.slice(0, targetCount)
+
+    // Estimate filtered total for hasMore check
+    const estimatedTotal = apiExhausted
+      ? allMatching.length
+      : Math.max(allMatching.length + targetCount, totalFromApi)
 
     setActionSource('live')
-    return { actions, total: data.count ?? actions.length, page, pageSize: perPage }
+    return { actions, total: estimatedTotal, page, pageSize: targetCount }
   } catch (err) {
     console.warn('Federal Register API failed, using fallback data:', err)
     setActionSource('demo')
