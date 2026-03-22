@@ -24,39 +24,49 @@
 ### S0-3: Routing + Layout Shell
 - [x] citizenos/src/main.tsx — React entry with BrowserRouter, imports globals.css
 - [x] citizenos/src/App.tsx — Route definitions with React.lazy + Suspense:
-  - [x] / → USAMap (interactive map)
+  - [x] / → LandingPage (logged out) or USAMap (logged in)
+  - [x] /map → USAMap (always accessible)
   - [x] /bill/:id → BillDetailPage
-  - [x] /reps → RepScoreDashboard (placeholder)
-  - [x] /rep/:memberId → RepDetail (placeholder)
-  - [x] /vote → VoteMapPage (placeholder)
+  - [x] /reps → RepScoreDashboard
+  - [x] /rep/:memberId → RepDetailPage
+  - [x] /vote → VoteMapPage
+  - [x] /candidate/:id → CandidateDetail
+  - [x] /actions → ActionSearchPage
+  - [x] /action/:id → ActionDetailPage
   - [x] /dashboard → Dashboard
+  - [x] /profile → ProfilePage
   - [x] /settings → SettingsPage (with NotifPreferences)
   - [x] /login → LoginForm
   - [x] /signup → SignupForm
   - [x] /onboarding → OnboardingFlow
 - [x] citizenos/src/components/layout/PageWrapper.tsx — max-w-7xl, mx-auto, padding
-- [x] citizenos/src/components/layout/Header.tsx — Logo, NavTabs, SearchBar, NotificationBell, UserMenu (auth-aware dropdown), mobile responsive with Sheet sidebar
-- [x] citizenos/src/components/layout/Dashboard.tsx — Welcome message, quick-link cards
+- [x] citizenos/src/components/layout/Header.tsx — Logo, NavTabs (dynamic: Dashboard tab for logged-in, Home tab for logged-out), SearchBar, NotificationBell, UserMenu (Profile, Dashboard, Complete Profile, Settings, Logout), mobile responsive with Sheet sidebar
+- [x] citizenos/src/components/layout/Dashboard.tsx — Welcome message, quick-link cards, ActionFeed, RepList for home state
+- [x] citizenos/src/components/layout/LandingPage.tsx — Hero section, feature cards, sample government actions preview, CTA buttons for signup/login
+- [x] citizenos/src/components/layout/OnboardingBanner.tsx — Persistent banner below header for logged-in users with incomplete onboarding, dismissible
 - [x] Auth initialization on app start (loadProfile in App useEffect)
 - [x] Sonner toast provider wired into RootLayout
 
 ### S0-4: Interactive USA Map
 - [x] Download TopoJSON: citizenos/public/us-states-topo.json
-- [x] citizenos/src/components/map/USAMap.tsx — react-simple-maps ComposableMap + Geographies + ZoomableGroup, clickable states, hover tooltip, 3 color modes (bill_activity, party_control, civic_score), home state highlighting
-- [x] citizenos/src/components/map/StatePanel.tsx — shadcn Sheet, slides from right, tabs (Bills, Actions, Reps, Candidates, Stats), Bills tab wired to BillList, Actions tab wired to ActionFeed, Reps tab wired to RepList, Candidates tab wired to CandidateList
+- [x] citizenos/src/components/map/USAMap.tsx — react-simple-maps ComposableMap + Geographies + ZoomableGroup, clickable states, hover tooltip, 3 color modes (bill_activity, party_control, civic_score), home state highlighting, distinct bg-slate-300/dark:bg-slate-900 background
+- [x] citizenos/src/components/map/StatePanel.tsx — shadcn Sheet (520px wide), slides from right, tabs (Bills, Actions, Reps, Candidates, Stats), Bills tab wired to BillList (compact mode), Actions tab wired to ActionFeed, Reps tab wired to RepList, Candidates tab wired to CandidateList
 - [x] citizenos/src/components/map/MapLegend.tsx — Bottom-left overlay with color scale legend per mode
 - [x] citizenos/src/components/map/MapControls.tsx — Top-right overlay with color mode dropdown
 - [x] citizenos/src/stores/useMapStore.ts — selectedState, colorMode, hoveredState + actions
 - [x] citizenos/src/api/map.ts — getStateStats() with 20 mock state entries
 
-### S0-5: Auth UI + Onboarding + OAuth
+### S0-5: Auth UI + Onboarding + OAuth + Profile
 - [x] citizenos/src/stores/useAuthStore.ts — user, profiles, categories, isAuthenticated, isLoading, requiresEmailVerification + actions (login, signup, logout, loginWithGoogle, loginWithGitHub, loadProfile, saveOnboarding, hasCompletedOnboarding)
-- [x] citizenos/src/components/auth/LoginForm.tsx — Email + password + Google/GitHub OAuth buttons, error display, redirect logic
+- [x] citizenos/src/api/auth.ts — Extended User type with visa_status, employment_status, age_group, household, onboarding_completed fields; OnboardingData interface
+- [x] citizenos/src/components/auth/LoginForm.tsx — Email + password + Google/GitHub OAuth buttons, error display, redirect logic (routes to /onboarding if incomplete)
 - [x] citizenos/src/components/auth/SignupForm.tsx — Name + email + password + Google/GitHub OAuth buttons, email verification flow, redirect to /onboarding
-- [x] citizenos/src/components/auth/OnboardingFlow.tsx — 3-step wizard (state/zip, persona chips, category toggles), progress bar, validation
+- [x] citizenos/src/components/auth/OnboardingFlow.tsx — 4-step wizard (Location, Background, Life Situation, Issues), skip-for-now option, comprehensive visa/employment/age/household fields, auto-builds personas from structured data
+- [x] citizenos/src/components/auth/ProfilePage.tsx — Full profile page with inline editing per section (Location, Background, Life Situation, Policy Interests, Account info), avatar, onboarding completion prompt
 - [x] Google OAuth via InsForge redirect flow (signInWithOAuth)
 - [x] GitHub OAuth via InsForge redirect flow (signInWithOAuth)
-- [x] Onboarding data stored as InsForge profile custom fields (state_code, zip_code, personas, categories)
+- [x] Onboarding data stored as InsForge profile custom fields (state_code, zip_code, personas, categories, visa_status, employment_status, age_group, household, onboarding_completed)
+- [x] Onboarding reminders: persistent banner (OnboardingBanner), notification dropdown prompt, "Complete Profile" in user menu — all hidden once onboarding is completed
 
 ### S0-6: Shared Libraries
 - [x] citizenos/src/lib/utils.ts — cn() function for class merging
@@ -64,6 +74,7 @@
 - [x] citizenos/src/lib/categories.ts — 15 categories with id, label
 - [x] citizenos/src/lib/states.ts — 50 states + DC with code, name, fips
 - [x] citizenos/src/lib/policyAxes.ts — 10 policy axes with questions for VoteMap quiz
+- [x] citizenos/src/lib/profileOptions.ts — Shared constants for visa types (21 options), employment statuses (13), age groups (7), household situations (11), with label lookup helpers
 
 ---
 
@@ -75,7 +86,7 @@
 - [ ] Deploy edge functions (skipped — using mock data layer, ready to wire to real backend)
 
 ### A-Phase 2: UI Components
-- [x] citizenos/src/components/billbreaker/BillList.tsx — Filter bar (category, status, search), BillCard grid, pagination, loading skeleton, empty state, accepts stateFilter prop
+- [x] citizenos/src/components/billbreaker/BillList.tsx — Filter bar (category, status, search), BillCard grid, continuous pagination (appends on load more), loading skeleton, empty state, accepts stateFilter + compact props
 - [x] citizenos/src/components/billbreaker/BillCard.tsx — Card with title, bill_id, status badge (color-coded), category badges, date, sponsor, bookmark toggle
 - [x] citizenos/src/components/billbreaker/BillDetailPage.tsx — Full page composing all sub-components, loading skeleton, back nav
 - [x] citizenos/src/components/billbreaker/BillHeader.tsx — Bill number, title, sponsor + party badge, status badge, date, categories
@@ -93,8 +104,8 @@
 ### A-Phase 3: Notifications
 - [x] citizenos/src/api/notifications.ts — 6 mock notifications, all CRUD functions + preferences
 - [x] citizenos/src/stores/useNotifStore.ts — notifications, unreadCount, preferences, polling (60s interval)
-- [x] citizenos/src/components/billbreaker/NotificationBell.tsx — Bell icon + red badge, opens popover dropdown
-- [x] citizenos/src/components/billbreaker/NotificationDropdown.tsx — Notification list with impact-level borders, time ago, mark read, navigate to bill
+- [x] citizenos/src/components/billbreaker/NotificationBell.tsx — Bell icon + red badge (bg-red-600 text-white, visible in both light/dark), opens popover dropdown
+- [x] citizenos/src/components/billbreaker/NotificationDropdown.tsx — Notification list with impact-level borders, time ago, mark read, navigate to bill, onboarding prompt pinned at top for incomplete profiles
 - [x] citizenos/src/components/billbreaker/NotifPreferences.tsx — Category toggles, notification type toggles, auto-save
 - [x] Wire NotificationBell into Header.tsx
 
@@ -185,3 +196,33 @@
 - [x] Add "Actions" tab to StatePanel
 - [x] Add ActionFeed to Dashboard
 - [x] Add "Actions" nav link in Header
+
+---
+
+## UI Fixes & Polish
+
+- [x] Fix notification badge visibility in light mode — changed from bg-destructive/text-destructive-foreground to bg-red-600/text-white
+- [x] Fix map background blending into states in light mode — changed from bg-muted/30 to bg-slate-300 dark:bg-slate-900
+- [x] Widen StatePanel sidebar from 400px to 520px to prevent bill card content overflow
+- [x] BillList compact mode — single-column grid when rendered inside StatePanel sidebar
+- [x] Continuous bill pagination — useBillStore.fetchBills now appends bills on load more instead of replacing
+- [x] Dynamic nav tabs — Dashboard tab visible only when logged in, Home tab for logged out
+- [x] User dropdown menu — added Profile and Complete Profile (when onboarding incomplete) items
+
+---
+
+## Pending / Not Yet Done
+
+- [ ] Deploy edge functions to InsForge (using mock data layer — ready to wire to real backend)
+- [ ] Error handling: toast notifications on API failure, retry buttons
+- [ ] Real API integration: replace mock data in api/bills.ts, api/reps.ts, api/candidates.ts, api/actions.ts with InsForge SDK calls
+- [ ] Federal Register API integration for live government actions data
+- [ ] Congress.gov API integration for live bill data
+- [ ] ProPublica / Google Civic API integration for live representative data
+- [ ] Search bar functionality (currently placeholder — no search logic wired)
+- [ ] State statistics tab in StatePanel (shows "coming soon" placeholder)
+- [ ] Push notifications / email notifications (currently polling-based mock only)
+- [ ] Password reset / forgot password flow
+- [ ] User account deletion
+- [ ] Mobile-responsive polish for all detail pages
+- [ ] Accessibility audit (keyboard nav, screen reader labels, focus traps)
