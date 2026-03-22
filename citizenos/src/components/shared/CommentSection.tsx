@@ -210,6 +210,7 @@ function CommentThread({
   const [showReplyForm, setShowReplyForm] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editBody, setEditBody] = useState(comment.body)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   const isOwner = user?.id === comment.user_id
   const displayName = comment.is_anonymous ? 'Anonymous' : comment.user_name
@@ -273,7 +274,7 @@ function CommentThread({
               </div>
             </div>
           ) : (
-            <p className="text-sm mt-1 whitespace-pre-wrap break-words">{comment.body}</p>
+            <CommentBody body={comment.body} isExpanded={isExpanded} onToggle={() => setIsExpanded(!isExpanded)} />
           )}
 
           {/* Actions */}
@@ -338,6 +339,45 @@ function CommentThread({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Comment body with show more / show less
+// ---------------------------------------------------------------------------
+
+const WORD_LIMIT = 50
+
+function CommentBody({
+  body,
+  isExpanded,
+  onToggle,
+}: {
+  body: string
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  const words = body.split(/\s+/)
+  const isLong = words.length > WORD_LIMIT
+
+  if (!isLong) {
+    return <p className="text-sm mt-1 whitespace-pre-wrap break-words">{body}</p>
+  }
+
+  const truncated = words.slice(0, WORD_LIMIT).join(' ') + '...'
+
+  return (
+    <div className="mt-1">
+      <p className="text-sm whitespace-pre-wrap break-words">
+        {isExpanded ? body : truncated}
+      </p>
+      <button
+        onClick={onToggle}
+        className="text-xs text-primary hover:underline mt-0.5"
+      >
+        {isExpanded ? 'Show less' : 'Show more'}
+      </button>
     </div>
   )
 }
