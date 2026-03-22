@@ -1,5 +1,12 @@
 // In The News — article feed API layer
-// Mock data for hackathon; wire to TinyFish Edge Function when ready
+// Uses News API (newsapi.org) for live data, falls back to mock data on failure/CORS.
+
+import { useDataSourceStore } from '@/stores/useDataSourceStore'
+const setArticleSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('articles', s)
+//
+// NOTE: News API's free plan blocks browser-side requests (CORS). In production
+// you would proxy these requests through your own backend (e.g. /api/news?q=...).
+// For now we attempt the direct call and gracefully fall back to mock data.
 
 export type ArticleType = 'news' | 'opinion' | 'blog' | 'press_release'
 
@@ -13,6 +20,75 @@ export interface PersonArticle {
   snippet: string
   published_date: string
   content_type: ArticleType
+}
+
+// ── News API helpers ─────────────────────────────────────────────────
+
+const NEWS_API_BASE = 'https://newsapi.org/v2'
+
+interface NewsApiArticle {
+  title: string
+  source: { name: string }
+  url: string
+  urlToImage: string | null
+  description: string | null
+  publishedAt: string
+  content: string | null
+}
+
+interface NewsApiResponse {
+  status: string
+  totalResults: number
+  articles: NewsApiArticle[]
+}
+
+/**
+ * Fetch articles from News API's /everything endpoint.
+ * Throws on network / CORS / non-ok responses so the caller can fall back.
+ */
+async function newsFetch(query: string): Promise<NewsApiArticle[]> {
+  const apiKey = import.meta.env.VITE_NEWS_API_KEY
+  if (!apiKey) {
+    throw new Error('VITE_NEWS_API_KEY is not set')
+  }
+
+  const params = new URLSearchParams({
+    q: query,
+    sortBy: 'publishedAt',
+    pageSize: '10',
+    apiKey,
+  })
+
+  const res = await fetch(`${NEWS_API_BASE}/everything?${params.toString()}`)
+
+  if (!res.ok) {
+    throw new Error(`News API responded with ${res.status}`)
+  }
+
+  const data: NewsApiResponse = await res.json()
+
+  if (data.status !== 'ok') {
+    throw new Error(`News API status: ${data.status}`)
+  }
+
+  return data.articles
+}
+
+/**
+ * Map a raw News API article to our PersonArticle interface.
+ */
+function mapNewsArticle(raw: NewsApiArticle, personId: string, index: number): PersonArticle {
+  return {
+    id: `news-${personId}-${index}`,
+    person_id: personId,
+    title: raw.title,
+    source: raw.source.name,
+    url: raw.url,
+    image_url: raw.urlToImage ?? null,
+    snippet: raw.description ?? '',
+    published_date: raw.publishedAt,
+    content_type: 'news' as ArticleType,
+  }
 }
 
 // ── Mock article data keyed by person_id ────────────────────────────
@@ -855,14 +931,29 @@ function generateFallbackArticles(personId: string, personName: string): PersonA
 
 // ── Public API ──────────────────────────────────────────────────────
 
-const SIMULATED_DELAY = 300
-
 export async function getPersonArticles(
   personId: string,
   personName: string
 ): Promise<PersonArticle[]> {
-  await new Promise((r) => setTimeout(r, SIMULATED_DELAY))
+  // Try the live News API first
+  setArticleSource('loading')
+  try {
+    const rawArticles = await newsFetch(personName)
 
+    if (rawArticles.length > 0) {
+      setArticleSource('live')
+      return rawArticles.map((raw, i) => mapNewsArticle(raw, personId, i))
+    }
+
+    // No results from API — fall through to mock data
+  } catch (_err) {
+    // News API call failed (CORS on free plan, missing key, network error, etc.).
+    // In production you would proxy through your backend to avoid CORS issues.
+    // Falling back to mock data silently.
+    console.warn('[articles] Live News API unavailable, using mock data:', _err)
+  }
+
+  setArticleSource('demo')
   // Return specific mock data if available, otherwise generate fallback
   return MOCK_ARTICLES[personId] ?? generateFallbackArticles(personId, personName)
 }

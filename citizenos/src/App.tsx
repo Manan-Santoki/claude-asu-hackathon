@@ -21,6 +21,7 @@ const OnboardingFlow = React.lazy(() => import('@/components/auth/OnboardingFlow
 const ProfilePage = React.lazy(() => import('@/components/auth/ProfilePage'))
 const VoteMapPage = React.lazy(() => import('@/components/votemap/VoteMapPage'))
 const CandidateDetail = React.lazy(() => import('@/components/votemap/CandidateDetail'))
+const BillSearchPage = React.lazy(() => import('@/components/billbreaker/BillSearchPage'))
 const ActionSearchPage = React.lazy(() => import('@/components/actions/ActionSearchPage'))
 const ActionDetailPage = React.lazy(() => import('@/components/actions/ActionDetailPage'))
 
@@ -73,6 +74,7 @@ export default function App() {
       <Route element={<RootLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/map" element={<MapView />} />
+        <Route path="/bill" element={<BillSearchPage />} />
         <Route path="/bill/:id" element={<BillDetailPage />} />
         <Route path="/reps" element={<RepScoreDashboard />} />
         <Route path="/rep/:memberId" element={<RepDetailPage />} />

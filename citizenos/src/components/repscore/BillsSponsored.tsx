@@ -66,7 +66,7 @@ export default function BillsSponsored({ bills }: BillsSponsoredProps) {
                 </div>
               </div>
               <span className="text-xs text-muted-foreground shrink-0">
-                {new Date(bill.introduced_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                {(() => { const d = new Date(bill.introduced_date); return isNaN(d.getTime()) ? 'Recent' : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); })()}
               </span>
             </div>
           ))}

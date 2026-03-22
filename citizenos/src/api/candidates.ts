@@ -1,5 +1,9 @@
-// VoteMap API client — mock data layer
-// Replace mock implementations with real API calls when backend is ready
+// VoteMap API client — live FEC data with mock fallback
+// Uses the FEC API (https://api.open.fec.gov/v1) for candidate and funding data.
+// Policy positions are not available from FEC, so mock data is retained for those.
+
+import { useDataSourceStore } from '@/stores/useDataSourceStore'
+const setCandSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('candidates', s)
 
 export interface Candidate {
   id: string
@@ -40,7 +44,147 @@ export interface CandidateCompareResult {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data — loaded from seed files at build time (inlined for mock layer)
+// FEC API helpers
+// ---------------------------------------------------------------------------
+
+const FEC_BASE = 'https://api.open.fec.gov/v1'
+
+function getFecApiKey(): string {
+  return import.meta.env.VITE_FEC_API_KEY ?? ''
+}
+
+/** Generic fetch wrapper for FEC API endpoints. */
+async function fecFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  const apiKey = getFecApiKey()
+  if (!apiKey) {
+    throw new Error('FEC API key not configured')
+  }
+
+  const url = new URL(`${FEC_BASE}${path}`)
+  url.searchParams.set('api_key', apiKey)
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v)
+  }
+
+  const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error(`FEC API error: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// ---------------------------------------------------------------------------
+// FEC → app type mapping
+// ---------------------------------------------------------------------------
+
+interface FECCandidateResult {
+  candidate_id: string
+  name: string
+  party_full: string
+  party: string
+  state: string
+  district: string
+  office: string // H, S, P
+  office_full: string
+  incumbent_challenge: string // I, C, O
+  candidate_status: string
+}
+
+interface FECCandidateResponse {
+  results: FECCandidateResult[]
+}
+
+interface FECTotalsResult {
+  candidate_id: string
+  receipts: number
+  individual_contributions: number
+  individual_itemized_contributions: number
+  individual_unitemized_contributions: number
+  other_political_committee_contributions: number
+  disbursements: number
+  coverage_end_date: string
+}
+
+interface FECTotalsResponse {
+  results: FECTotalsResult[]
+}
+
+interface FECScheduleAResult {
+  contributor_name: string
+  contribution_receipt_amount: number
+  committee_id: string
+}
+
+interface FECScheduleAResponse {
+  results: FECScheduleAResult[]
+}
+
+function mapFECParty(party: string): string {
+  const map: Record<string, string> = {
+    DEM: 'D',
+    REP: 'R',
+    LIB: 'L',
+    GRE: 'G',
+    IND: 'I',
+  }
+  return map[party] ?? party
+}
+
+function mapFECOffice(office: string): 'president' | 'senate' | 'house' {
+  switch (office) {
+    case 'H':
+      return 'house'
+    case 'S':
+      return 'senate'
+    case 'P':
+      return 'president'
+    default:
+      return 'house'
+  }
+}
+
+/** Convert a raw FEC candidate record into our Candidate interface. */
+function mapFECCandidate(raw: FECCandidateResult): Candidate {
+  const nameSeed = raw.name.toLowerCase().replace(/[^a-z]/g, '-')
+  return {
+    id: raw.candidate_id,
+    name: formatName(raw.name),
+    party: mapFECParty(raw.party),
+    state_code: raw.state,
+    district: raw.office === 'H' && raw.district ? raw.district : null,
+    office_sought: mapFECOffice(raw.office),
+    incumbent: raw.incumbent_challenge === 'I',
+    photo_url: `https://api.dicebear.com/7.x/personas/svg?seed=${nameSeed}`,
+    bio: `${raw.office_full} candidate (${raw.party_full}) from ${raw.state}${raw.district && raw.office === 'H' ? `, district ${raw.district}` : ''}.`,
+    website: '',
+  }
+}
+
+/**
+ * FEC names come as "LAST, FIRST MIDDLE". Convert to "First Last".
+ */
+function formatName(fecName: string): string {
+  if (!fecName) return fecName
+  const parts = fecName.split(',').map((s) => s.trim())
+  if (parts.length < 2) {
+    // Already in normal order – just title-case it
+    return titleCase(fecName)
+  }
+  const last = titleCase(parts[0])
+  const first = titleCase(parts[1])
+  return `${first} ${last}`
+}
+
+function titleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : ''))
+    .join(' ')
+}
+
+// ---------------------------------------------------------------------------
+// Mock data — retained as fallback
 // ---------------------------------------------------------------------------
 
 const MOCK_CANDIDATES: Candidate[] = [
@@ -473,52 +617,159 @@ const MOCK_REPUTATIONS: Record<string, CandidateReputation> = {
 // API functions
 // ---------------------------------------------------------------------------
 
-/** Simulate network delay */
-function delay(ms = 300): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
 export async function getCandidates(
   state?: string,
   office?: string
 ): Promise<Candidate[]> {
-  await delay(400)
-  let results = [...MOCK_CANDIDATES]
-  if (state) results = results.filter((c) => c.state_code === state)
-  if (office) results = results.filter((c) => c.office_sought === office)
-  return results
+  setCandSource('loading')
+  try {
+    const params: Record<string, string> = {
+      election_year: '2026',
+      sort: '-total_receipts',
+      per_page: '20',
+    }
+    if (state) params.state = state
+    if (office) {
+      const officeMap: Record<string, string> = { president: 'P', senate: 'S', house: 'H' }
+      params.office = officeMap[office] ?? office
+    }
+
+    const data = await fecFetch<FECCandidateResponse>('/candidates/search/', params)
+    if (data.results && data.results.length > 0) {
+      setCandSource('live')
+      return data.results.map(mapFECCandidate)
+    }
+    // If the API returned empty results, fall through to mock
+    throw new Error('No FEC results returned')
+  } catch {
+    setCandSource('demo')
+    // Fallback to mock data
+    let results = [...MOCK_CANDIDATES]
+    if (state) results = results.filter((c) => c.state_code === state)
+    if (office) results = results.filter((c) => c.office_sought === office)
+    return results
+  }
 }
 
 export async function getCandidateDetail(id: string): Promise<Candidate | null> {
-  await delay(300)
-  return MOCK_CANDIDATES.find((c) => c.id === id) ?? null
+  try {
+    const data = await fecFetch<FECCandidateResponse>(`/candidate/${id}/`)
+    if (data.results && data.results.length > 0) {
+      return mapFECCandidate(data.results[0])
+    }
+    throw new Error('No FEC candidate detail returned')
+  } catch {
+    // Fallback to mock data
+    return MOCK_CANDIDATES.find((c) => c.id === id) ?? null
+  }
 }
 
 export async function getCandidatePositions(
   id: string
 ): Promise<CandidatePosition[]> {
-  await delay(300)
+  // FEC does not provide policy position data.
+  // This would require a different data source (e.g., VoteSmart, ISideWith).
+  // For now, return mock positions if available, otherwise an empty array.
   return MOCK_POSITIONS[id] ?? []
 }
 
 export async function getCandidateReputation(
   id: string
 ): Promise<CandidateReputation | null> {
-  await delay(400)
-  return MOCK_REPUTATIONS[id] ?? null
+  try {
+    // Fetch candidate financial totals from FEC
+    const totalsData = await fecFetch<FECTotalsResponse>(`/candidate/${id}/totals/`, {
+      election_year: '2026',
+    })
+
+    if (!totalsData.results || totalsData.results.length === 0) {
+      throw new Error('No FEC totals returned')
+    }
+
+    const totals = totalsData.results[0]
+    const totalRaised = totals.receipts || 0
+    const individualContributions = totals.individual_contributions || 0
+    const unitemized = totals.individual_unitemized_contributions || 0
+
+    // Unitemized individual contributions are generally small-dollar (<$200)
+    const smallDonorPct = individualContributions > 0
+      ? Math.round((unitemized / individualContributions) * 100)
+      : 0
+
+    // Funding transparency heuristic: higher small-donor % and individual contributions → more transparent
+    const individualPct = totalRaised > 0 ? individualContributions / totalRaised : 0
+    const fundingTransparency = Math.min(100, Math.round(individualPct * 70 + smallDonorPct * 0.3))
+
+    // Reputation score heuristic based on small donor % and transparency
+    const reputationScore = Math.min(100, Math.round(50 + smallDonorPct * 0.3 + fundingTransparency * 0.2))
+
+    // Try to fetch top donors via schedule A (individual contributions)
+    let topDonors: { name: string; amount: number }[] = []
+    try {
+      // We need the candidate's principal committee to query schedule_a.
+      // First get the candidate detail to find the principal committee.
+      const candidateData = await fecFetch<{ results: Array<{ principal_committees: Array<{ committee_id: string }> }> }>(
+        `/candidate/${id}/`,
+      )
+      const committees = candidateData.results?.[0]?.principal_committees
+      if (committees && committees.length > 0) {
+        const committeeId = committees[0].committee_id
+        const donorData = await fecFetch<FECScheduleAResponse>('/schedules/schedule_a/', {
+          committee_id: committeeId,
+          sort: '-contribution_receipt_amount',
+          per_page: '5',
+        })
+        if (donorData.results && donorData.results.length > 0) {
+          topDonors = donorData.results.map((d) => ({
+            name: d.contributor_name || 'Unknown Contributor',
+            amount: d.contribution_receipt_amount || 0,
+          }))
+        }
+      }
+    } catch {
+      // If donor fetch fails, leave topDonors empty — the totals data is still valuable
+    }
+
+    return {
+      candidate_id: id,
+      reputation_score: reputationScore,
+      funding_transparency: fundingTransparency,
+      total_raised: totalRaised,
+      small_donor_pct: smallDonorPct,
+      top_donors: topDonors,
+      endorsements: [], // FEC does not track endorsements
+      controversy_flags: [], // FEC does not track controversies
+      media_sentiment: 'neutral', // Would need a different data source
+      ai_summary: `Based on FEC filings: raised $${(totalRaised / 1_000_000).toFixed(1)}M total with ${smallDonorPct}% from small donors (unitemized contributions under $200). Funding transparency score: ${fundingTransparency}/100.`,
+    }
+  } catch {
+    // Fallback to mock data
+    return MOCK_REPUTATIONS[id] ?? null
+  }
 }
 
 export async function compareCandidates(
   ids: string[]
 ): Promise<CandidateCompareResult> {
-  await delay(500)
-  const candidates = MOCK_CANDIDATES.filter((c) => ids.includes(c.id))
+  // Fetch all candidate data in parallel, composing from other functions
+  const [candidateResults, positionResults, reputationResults] = await Promise.all([
+    Promise.all(ids.map((id) => getCandidateDetail(id))),
+    Promise.all(ids.map((id) => getCandidatePositions(id))),
+    Promise.all(ids.map((id) => getCandidateReputation(id))),
+  ])
+
+  const candidates: Candidate[] = candidateResults.filter(
+    (c): c is Candidate => c !== null,
+  )
+
   const positions: Record<string, CandidatePosition[]> = {}
   const reputations: Record<string, CandidateReputation> = {}
-  for (const id of ids) {
-    positions[id] = MOCK_POSITIONS[id] ?? []
-    const rep = MOCK_REPUTATIONS[id]
-    if (rep) reputations[id] = rep
+
+  for (let i = 0; i < ids.length; i++) {
+    positions[ids[i]] = positionResults[i]
+    const rep = reputationResults[i]
+    if (rep) reputations[ids[i]] = rep
   }
+
   return { candidates, positions, reputations }
 }

@@ -13,6 +13,7 @@ import {
 import { useBillStore } from '@/stores/useBillStore'
 import { CATEGORIES } from '@/lib/categories'
 import BillCard from './BillCard'
+import DataSourceBadge from '@/components/shared/DataSourceBadge'
 
 const STATUS_OPTIONS = [
   { value: 'introduced', label: 'Introduced' },
@@ -77,7 +78,10 @@ export default function BillList({ stateFilter, compact }: BillListProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter bar */}
+      {/* Source indicator + Filter bar */}
+      <div className="flex items-center justify-between">
+        <DataSourceBadge sourceKey="bills" />
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         {/* Keyword search */}
         <div className="relative flex-1 min-w-[200px]">

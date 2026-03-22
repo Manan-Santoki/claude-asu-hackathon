@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { getCandidates, type Candidate } from '@/api/candidates'
 import { useNavigate } from 'react-router-dom'
 import { Users } from 'lucide-react'
+import DataSourceBadge from '@/components/shared/DataSourceBadge'
 
 interface Props {
   stateFilter?: string
@@ -65,6 +66,7 @@ export default function CandidateList({ stateFilter }: Props) {
 
   return (
     <div className="space-y-4">
+      <DataSourceBadge sourceKey="candidates" />
       {!stateFilter && (
         <div className="flex items-center gap-2">
           <Select value={officeFilter} onValueChange={setOfficeFilter}>

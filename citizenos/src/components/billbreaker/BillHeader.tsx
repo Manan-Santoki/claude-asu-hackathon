@@ -36,11 +36,11 @@ export default function BillHeader({ bill }: BillHeaderProps) {
         ? `S. ${bill.bill_number}`
         : bill.bill_id
 
-  const formattedDate = new Date(bill.introduced_date).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  const dateStr = bill.introduced_date || bill.last_action_date
+  const parsedDate = dateStr ? new Date(dateStr) : null
+  const formattedDate = parsedDate && !isNaN(parsedDate.getTime())
+    ? parsedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : 'Recent'
 
   return (
     <div className="flex flex-col gap-4">

@@ -44,11 +44,11 @@ export default function BillCard({ bill }: BillCardProps) {
     toggleSave(bill.id)
   }
 
-  const formattedDate = new Date(bill.introduced_date).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  const dateStr = bill.introduced_date || bill.last_action_date
+  const parsedDate = dateStr ? new Date(dateStr) : null
+  const formattedDate = parsedDate && !isNaN(parsedDate.getTime())
+    ? parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Recent'
 
   const billIdDisplay =
     bill.bill_type === 'hr'

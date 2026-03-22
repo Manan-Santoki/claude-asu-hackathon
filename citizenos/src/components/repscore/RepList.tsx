@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import RepCard from './RepCard'
 import { useRepStore } from '@/stores/useRepStore'
+import DataSourceBadge from '@/components/shared/DataSourceBadge'
 import { getRepScore } from '@/api/reps'
 import type { RepScores } from '@/api/reps'
 
@@ -54,6 +55,7 @@ export default function RepList({ stateFilter, compact }: RepListProps) {
 
   return (
     <div className="space-y-3">
+      <DataSourceBadge sourceKey="reps" />
       {reps.map((rep) => (
         <RepCard
           key={rep.id}

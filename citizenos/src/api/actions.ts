@@ -1,5 +1,8 @@
-// Government Actions API client — mock data layer
-// Replace mock implementations with real Federal Register API calls when backend is ready
+// Government Actions API client — live Federal Register API with fallback mock data
+// Uses https://www.federalregister.gov/api/v1 (no API key required)
+
+import { useDataSourceStore } from '@/stores/useDataSourceStore'
+const setActionSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('actions', s)
 
 export type ActionType =
   | 'bill'
@@ -63,10 +66,265 @@ export interface ChatMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Federal Register API helper
 // ---------------------------------------------------------------------------
 
-const MOCK_ACTIONS: GovernmentAction[] = [
+const FED_REG_BASE = 'https://www.federalregister.gov/api/v1'
+
+async function fedRegFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
+  const url = new URL(`${FED_REG_BASE}${path}`)
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.append(key, value)
+    }
+  }
+  const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error(`Federal Register API error: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// ---------------------------------------------------------------------------
+// Mapping Federal Register documents to GovernmentAction
+// ---------------------------------------------------------------------------
+
+interface FedRegAgency {
+  name: string
+  id?: number
+  slug?: string
+}
+
+interface FedRegDocument {
+  title: string
+  abstract: string | null
+  document_number: string
+  type: string        // PRESDOCU, RULE, PRORULE, NOTICE
+  subtype: string | null
+  executive_order_number: number | null
+  signing_date: string | null
+  publication_date: string
+  effective_on: string | null
+  agencies: FedRegAgency[]
+  full_text_xml_url: string | null
+  pdf_url: string | null
+  html_url: string | null
+  body_html_url: string | null
+  json_url?: string | null
+}
+
+interface FedRegSearchResponse {
+  count: number
+  results: FedRegDocument[]
+  total_pages?: number
+}
+
+function mapFedRegType(doc: FedRegDocument): ActionType {
+  switch (doc.type) {
+    case 'PRESDOCU': {
+      const sub = (doc.subtype ?? '').toLowerCase()
+      if (sub.includes('executive order')) return 'executive_order'
+      if (sub.includes('proclamation')) return 'proclamation'
+      if (sub.includes('memorand')) return 'memorandum'
+      // Guess from title if subtype missing
+      const titleLower = doc.title.toLowerCase()
+      if (titleLower.includes('executive order')) return 'executive_order'
+      if (titleLower.includes('proclamation')) return 'proclamation'
+      if (titleLower.includes('memorand')) return 'memorandum'
+      return 'executive_order' // default for presidential documents
+    }
+    case 'RULE':
+      return 'final_rule'
+    case 'PRORULE':
+      return 'proposed_rule'
+    case 'NOTICE':
+      return 'agency_action'
+    default:
+      return 'agency_action'
+  }
+}
+
+/** Derive rough categories from the title and abstract text */
+function deriveCategories(title: string, abstract: string | null): string[] {
+  const text = `${title} ${abstract ?? ''}`.toLowerCase()
+  const cats: string[] = []
+
+  const mapping: Record<string, string[]> = {
+    immigration: ['immigra', 'visa', 'h-1b', 'h1b', 'asylum', 'deporta', 'border', 'alien', 'citizen', 'naturaliz', 'refugee', 'nonimmigrant', 'travel ban'],
+    economy: ['econom', 'tariff', 'trade', 'tax', 'fiscal', 'inflation', 'gdp', 'financ', 'market', 'monetary'],
+    healthcare: ['health', 'medic', 'drug', 'pharma', 'hospital', 'insurance', 'medicare', 'medicaid', 'disease', 'pandemic', 'vaccine'],
+    education: ['educat', 'school', 'student', 'university', 'college', 'pell grant', 'loan', 'fafsa', 'academic'],
+    environment: ['environment', 'climate', 'emission', 'pollution', 'energy', 'fossil', 'renewable', 'carbon', 'epa', 'clean air', 'clean water'],
+    labor: ['labor', 'worker', 'wage', 'employ', 'union', 'workforce', 'osha', 'overtime', 'contractor'],
+    technology: ['technolog', 'cyber', 'artificial intelligence', 'data privacy', 'internet', 'telecom', 'digital', 'software', 'crypto'],
+    defense: ['defense', 'military', 'armed forces', 'pentagon', 'national security', 'weapons', 'army', 'navy', 'air force'],
+    veterans: ['veteran', 'va ', 'warrior'],
+    trade: ['trade', 'tariff', 'import', 'export', 'customs', 'wto'],
+    government_spending: ['budget', 'spending', 'appropriat', 'debt', 'deficit', 'government efficienc'],
+    foreign_policy: ['foreign', 'diplomat', 'sanction', 'ambassador', 'treaty', 'nato', 'international'],
+    social_issues: ['civil rights', 'discriminat', 'equality', 'lgbtq', 'abortion', 'religion', 'free speech', 'social media', 'vetting'],
+  }
+
+  for (const [category, keywords] of Object.entries(mapping)) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      cats.push(category)
+    }
+  }
+
+  return cats.length > 0 ? cats : ['government']
+}
+
+/** Derive affected personas from title/abstract */
+function deriveAffectedPersonas(title: string, abstract: string | null): string[] {
+  const text = `${title} ${abstract ?? ''}`.toLowerCase()
+  const personas: string[] = []
+
+  const mapping: Record<string, string[]> = {
+    visa_holder: ['visa', 'immigra', 'h-1b', 'h1b', 'nonimmigrant', 'alien', 'foreign national', 'travel ban', 'asylum'],
+    student: ['student', 'university', 'college', 'education', 'fafsa', 'pell grant', 'school', 'academic', 'f-1', 'f1'],
+    small_business: ['small business', 'sba', 'entrepreneur', 'contractor', 'employer', 'tariff', 'trade'],
+    senior: ['senior', 'social security', 'medicare', 'retirement', 'elderly', 'aging'],
+    veteran: ['veteran', 'military', 'armed forces', 'warrior', 'va '],
+    parent: ['parent', 'child', 'family', 'famili'],
+    healthcare_worker: ['healthcare worker', 'nurse', 'doctor', 'physician', 'hospital', 'nih', 'medical research'],
+    gig_worker: ['gig', 'independent contractor', 'freelanc', 'uber', 'doordash', 'rideshare'],
+  }
+
+  for (const [persona, keywords] of Object.entries(mapping)) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      personas.push(persona)
+    }
+  }
+
+  return personas.length > 0 ? personas : ['general_public']
+}
+
+/** Determine impact level heuristically from document type and keywords */
+function deriveImpactLevel(doc: FedRegDocument): 'high' | 'medium' | 'low' {
+  // Presidential documents and final rules tend to be higher impact
+  if (doc.type === 'PRESDOCU') return 'high'
+  if (doc.type === 'RULE') return 'medium'
+  if (doc.type === 'PRORULE') return 'medium'
+
+  const text = `${doc.title} ${doc.abstract ?? ''}`.toLowerCase()
+  if (text.includes('emergency') || text.includes('immediately') || text.includes('critical')) return 'high'
+  return 'low'
+}
+
+/** Build a basic timeline from dates available */
+function deriveTimeline(doc: FedRegDocument): TimelineEvent[] {
+  const today = new Date()
+  const events: TimelineEvent[] = []
+
+  if (doc.signing_date) {
+    events.push({
+      date: doc.signing_date,
+      label: 'Signed',
+      completed: new Date(doc.signing_date) <= today,
+    })
+  }
+
+  events.push({
+    date: doc.publication_date,
+    label: 'Published in Federal Register',
+    completed: new Date(doc.publication_date) <= today,
+  })
+
+  if (doc.effective_on) {
+    events.push({
+      date: doc.effective_on,
+      label: 'Effective date',
+      completed: new Date(doc.effective_on) <= today,
+    })
+  }
+
+  return events
+}
+
+/** Generate a short human-readable impact story from title + abstract */
+function deriveImpactStory(doc: FedRegDocument): string {
+  const abstract = doc.abstract?.trim()
+  if (abstract && abstract.length > 40) {
+    return abstract
+  }
+  return `This ${doc.type === 'PRESDOCU' ? 'presidential document' : doc.type === 'RULE' ? 'final rule' : doc.type === 'PRORULE' ? 'proposed rule' : 'document'} — "${doc.title}" — was published on ${doc.publication_date}. Review the full text for detailed impact analysis.`
+}
+
+/** Compute issuing authority from agencies + type */
+function deriveIssuingAuthority(doc: FedRegDocument): string {
+  if (doc.type === 'PRESDOCU') return 'President'
+  if (doc.agencies.length > 0) return doc.agencies[0].name
+  return 'Federal Government'
+}
+
+function mapFedRegDocument(doc: FedRegDocument): GovernmentAction {
+  const actionType = mapFedRegType(doc)
+  const categories = deriveCategories(doc.title, doc.abstract)
+  const affectedPersonas = deriveAffectedPersonas(doc.title, doc.abstract)
+  const summaryText = doc.abstract?.trim() || doc.title
+  const today = new Date()
+
+  const effectiveDate = doc.effective_on ?? null
+  let status = 'active'
+  let statusDetail = 'Published in the Federal Register.'
+  if (effectiveDate) {
+    if (new Date(effectiveDate) > today) {
+      status = 'pending'
+      statusDetail = `Takes effect on ${effectiveDate}.`
+    } else {
+      status = 'active'
+      statusDetail = `In effect since ${effectiveDate}.`
+    }
+  }
+  if (doc.type === 'PRORULE') {
+    status = 'proposed'
+    statusDetail = 'Proposed rule — public comments may be open.'
+  }
+
+  // Build impact_personas from the affected personas list
+  const impactPersonas: Record<string, string> = {}
+  for (const p of affectedPersonas) {
+    impactPersonas[p] = `This ${actionType.replace(/_/g, ' ')} may affect you. Review the full text for details: ${doc.html_url ?? doc.pdf_url ?? ''}`
+  }
+
+  return {
+    id: doc.document_number,
+    action_id: doc.document_number,
+    action_type: actionType,
+    title: doc.title,
+    summary_raw: summaryText,
+    summary_ai: summaryText,
+    full_text_url: doc.html_url ?? doc.full_text_xml_url ?? '',
+    pdf_url: doc.pdf_url ?? '',
+    issuing_authority: deriveIssuingAuthority(doc),
+    agencies: doc.agencies.map((a) => a.name),
+    document_number: doc.document_number,
+    executive_order_number: doc.executive_order_number ?? null,
+    signing_date: doc.signing_date ?? null,
+    effective_date: effectiveDate,
+    publication_date: doc.publication_date,
+    status,
+    status_detail: statusDetail,
+    categories,
+    affected_personas: affectedPersonas,
+    impact_level: deriveImpactLevel(doc),
+    state_relevance: [],
+    impact_personas: impactPersonas,
+    impact_story: deriveImpactStory(doc),
+    ai_processed: false,
+    related_action_ids: [],
+    legal_challenges: [],
+    timeline: deriveTimeline(doc),
+    source_url: doc.html_url ?? '',
+    source_api: 'federal_register',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback data (former MOCK_ACTIONS)
+// ---------------------------------------------------------------------------
+
+const FALLBACK_ACTIONS: GovernmentAction[] = [
   {
     id: 'act-1',
     action_id: 'proc-10923',
@@ -483,14 +741,61 @@ const MOCK_ACTIONS: GovernmentAction[] = [
   },
 ]
 
+// ---------------------------------------------------------------------------
+// In-memory saved actions (unchanged)
+// ---------------------------------------------------------------------------
+
 let savedActionIds = new Set<string>()
 
+// Simple in-memory cache for live API results so detail lookups are fast
+const liveActionsCache = new Map<string, GovernmentAction>()
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Internal: map our ActionType filter to Fed Reg conditions params
 // ---------------------------------------------------------------------------
 
-function delay(ms: number = 300): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function actionTypeToFedRegConditions(type?: ActionType | 'all'): Record<string, string> {
+  if (!type || type === 'all') {
+    return {
+      'conditions[type][]': 'PRESDOCU',
+      // We'll add multiple types via the URL manually
+    }
+  }
+  switch (type) {
+    case 'executive_order':
+    case 'proclamation':
+    case 'memorandum':
+      return { 'conditions[type][]': 'PRESDOCU' }
+    case 'final_rule':
+      return { 'conditions[type][]': 'RULE' }
+    case 'proposed_rule':
+      return { 'conditions[type][]': 'PRORULE' }
+    case 'agency_action':
+      return { 'conditions[type][]': 'NOTICE' }
+    default:
+      return {}
+  }
+}
+
+/** Build URL with multiple type conditions (since URLSearchParams merges same-name keys) */
+function buildSearchUrl(
+  params: Record<string, string>,
+  types?: string[],
+  searchTerm?: string,
+): string {
+  const url = new URL(`${FED_REG_BASE}/documents`)
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'conditions[type][]') continue // handled below
+    url.searchParams.append(key, value)
+  }
+  const docTypes = types ?? ['PRESDOCU', 'RULE', 'PRORULE', 'NOTICE']
+  for (const t of docTypes) {
+    url.searchParams.append('conditions[type][]', t)
+  }
+  if (searchTerm) {
+    url.searchParams.append('conditions[term]', searchTerm)
+  }
+  return url.toString()
 }
 
 // ---------------------------------------------------------------------------
@@ -505,60 +810,126 @@ export async function getActions(filters: {
   search?: string
   page?: number
 } = {}): Promise<{ actions: GovernmentAction[]; total: number; page: number; pageSize: number }> {
-  await delay(400)
+  setActionSource('loading')
+  try {
+    const page = filters.page ?? 1
+    const perPage = 10
 
-  let filtered = [...MOCK_ACTIONS]
+    // Determine document types based on action type filter
+    let docTypes: string[] | undefined
+    if (filters.type && filters.type !== 'all') {
+      const conds = actionTypeToFedRegConditions(filters.type)
+      const t = conds['conditions[type][]']
+      if (t) docTypes = [t]
+    }
 
-  if (filters.type && filters.type !== 'all') {
-    filtered = filtered.filter((a) => a.action_type === filters.type)
-  }
-  if (filters.category) {
-    filtered = filtered.filter((a) => a.categories.includes(filters.category!))
-  }
-  if (filters.persona) {
-    filtered = filtered.filter((a) => a.affected_personas.includes(filters.persona!))
-  }
-  if (filters.state) {
-    filtered = filtered.filter(
-      (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!)
+    const searchUrl = buildSearchUrl(
+      { per_page: String(perPage), page: String(page), order: 'newest' },
+      docTypes,
+      filters.search,
     )
+
+    const res = await fetch(searchUrl)
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = (await res.json()) as FedRegSearchResponse
+
+    let actions = data.results.map(mapFedRegDocument)
+
+    // Cache results for detail lookups
+    for (const a of actions) {
+      liveActionsCache.set(a.id, a)
+    }
+
+    // Client-side filtering for fields Fed Reg doesn't support server-side
+    if (filters.type && filters.type !== 'all') {
+      // For PRESDOCU sub-types, the API returns all presidential docs — filter locally
+      actions = actions.filter((a) => a.action_type === filters.type)
+    }
+    if (filters.category) {
+      actions = actions.filter((a) => a.categories.includes(filters.category!))
+    }
+    if (filters.persona) {
+      actions = actions.filter((a) => a.affected_personas.includes(filters.persona!))
+    }
+    if (filters.state) {
+      actions = actions.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
+      )
+    }
+
+    setActionSource('live')
+    return { actions, total: data.count ?? actions.length, page, pageSize: perPage }
+  } catch (err) {
+    console.warn('Federal Register API failed, using fallback data:', err)
+    setActionSource('demo')
+    // Fallback to static data
+    let filtered = [...FALLBACK_ACTIONS]
+
+    if (filters.type && filters.type !== 'all') {
+      filtered = filtered.filter((a) => a.action_type === filters.type)
+    }
+    if (filters.category) {
+      filtered = filtered.filter((a) => a.categories.includes(filters.category!))
+    }
+    if (filters.persona) {
+      filtered = filtered.filter((a) => a.affected_personas.includes(filters.persona!))
+    }
+    if (filters.state) {
+      filtered = filtered.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
+      )
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase()
+      filtered = filtered.filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.summary_ai.toLowerCase().includes(q) ||
+          a.categories.some((c) => c.includes(q)),
+      )
+    }
+
+    filtered.sort((a, b) => {
+      const dateA = a.effective_date || a.signing_date || a.publication_date
+      const dateB = b.effective_date || b.signing_date || b.publication_date
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
+    })
+
+    const page = filters.page ?? 1
+    const pageSize = 10
+    const start = (page - 1) * pageSize
+    const paged = filtered.slice(start, start + pageSize)
+
+    return { actions: paged, total: filtered.length, page, pageSize }
   }
-  if (filters.search) {
-    const q = filters.search.toLowerCase()
-    filtered = filtered.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) ||
-        a.summary_ai.toLowerCase().includes(q) ||
-        a.categories.some((c) => c.includes(q))
-    )
-  }
-
-  // Sort by most recent
-  filtered.sort((a, b) => {
-    const dateA = a.effective_date || a.signing_date || a.publication_date
-    const dateB = b.effective_date || b.signing_date || b.publication_date
-    return new Date(dateB).getTime() - new Date(dateA).getTime()
-  })
-
-  const page = filters.page ?? 1
-  const pageSize = 10
-  const start = (page - 1) * pageSize
-  const paged = filtered.slice(start, start + pageSize)
-
-  return { actions: paged, total: filtered.length, page, pageSize }
 }
 
 export async function getActionDetail(actionId: string): Promise<GovernmentAction | null> {
-  await delay(300)
-  return MOCK_ACTIONS.find((a) => a.id === actionId) ?? null
+  // Check cache first (populated by getActions / getActionFeed)
+  const cached = liveActionsCache.get(actionId)
+  if (cached) return cached
+
+  // Check fallback data (for curated items with custom ids like "act-1")
+  const fallback = FALLBACK_ACTIONS.find((a) => a.id === actionId)
+  if (fallback) return fallback
+
+  // Try live API by document_number
+  try {
+    const data = await fedRegFetch<FedRegDocument>(`/documents/${actionId}`)
+    const action = mapFedRegDocument(data)
+    liveActionsCache.set(action.id, action)
+    return action
+  } catch (err) {
+    console.warn('Federal Register detail lookup failed:', err)
+    return null
+  }
 }
 
 export async function getActionImpact(
   actionId: string,
-  personas: string[]
+  personas: string[],
 ): Promise<Record<string, string>> {
-  await delay(500)
-  const action = MOCK_ACTIONS.find((a) => a.id === actionId)
+  const action = await getActionDetail(actionId)
   if (!action) return {}
 
   const result: Record<string, string> = {}
@@ -569,19 +940,16 @@ export async function getActionImpact(
 }
 
 export async function getActionStory(actionId: string): Promise<string> {
-  await delay(400)
-  const action = MOCK_ACTIONS.find((a) => a.id === actionId)
+  const action = await getActionDetail(actionId)
   return action?.impact_story ?? 'No impact story available.'
 }
 
 export async function chatWithAction(
   actionId: string,
   message: string,
-  _history: ChatMessage[]
+  _history: ChatMessage[],
 ): Promise<{ response: string }> {
-  await delay(800)
-
-  const action = MOCK_ACTIONS.find((a) => a.id === actionId)
+  const action = await getActionDetail(actionId)
   if (!action) return { response: 'Sorry, I could not find that action.' }
 
   const lowerMsg = message.toLowerCase()
@@ -593,7 +961,7 @@ export async function chatWithAction(
   }
   if (lowerMsg.includes('exempt') || lowerMsg.includes('exception') || lowerMsg.includes('not apply')) {
     return {
-      response: `Good question about exemptions. ${action.summary_ai.split('.').filter(s => s.toLowerCase().includes('exempt') || s.toLowerCase().includes('not')).join('.') || 'The specific exemptions depend on your situation. Could you tell me more about your circumstances?'}`,
+      response: `Good question about exemptions. ${action.summary_ai.split('.').filter((s: string) => s.toLowerCase().includes('exempt') || s.toLowerCase().includes('not')).join('.') || 'The specific exemptions depend on your situation. Could you tell me more about your circumstances?'}`,
     }
   }
   if (lowerMsg.includes('status') || lowerMsg.includes('when') || lowerMsg.includes('effective') || lowerMsg.includes('date')) {
@@ -605,7 +973,7 @@ export async function chatWithAction(
     if (action.legal_challenges.length === 0) {
       return { response: 'There are no known legal challenges to this action at this time.' }
     }
-    const challenges = action.legal_challenges.map(c => `${c.case_name} (${c.court}): ${c.summary}`).join('\n\n')
+    const challenges = action.legal_challenges.map((c) => `${c.case_name} (${c.court}): ${c.summary}`).join('\n\n')
     return { response: `There are ${action.legal_challenges.length} legal challenge(s):\n\n${challenges}` }
   }
   if (lowerMsg.includes('what can i do') || lowerMsg.includes('options') || lowerMsg.includes('action')) {
@@ -620,18 +988,20 @@ export async function chatWithAction(
 }
 
 export async function saveAction(actionId: string): Promise<void> {
-  await delay(200)
   savedActionIds.add(actionId)
 }
 
 export async function unsaveAction(actionId: string): Promise<void> {
-  await delay(200)
   savedActionIds.delete(actionId)
 }
 
 export async function getSavedActions(): Promise<GovernmentAction[]> {
-  await delay(300)
-  return MOCK_ACTIONS.filter((a) => savedActionIds.has(a.id))
+  const results: GovernmentAction[] = []
+  for (const id of savedActionIds) {
+    const action = await getActionDetail(id)
+    if (action) results.push(action)
+  }
+  return results
 }
 
 export function getSavedActionIdsSync(): Set<string> {
@@ -644,43 +1014,102 @@ export async function getActionFeed(options: {
   state?: string
   limit?: number
 } = {}): Promise<GovernmentAction[]> {
-  await delay(400)
-
-  let feed = [...MOCK_ACTIONS]
-
-  // Personalize feed
-  if (options.personas && options.personas.length > 0) {
-    feed = feed.filter((a) =>
-      a.affected_personas.some((p) => options.personas!.includes(p))
+  try {
+    const perPage = Math.min(options.limit ?? 10, 20)
+    const searchUrl = buildSearchUrl(
+      { per_page: String(perPage), page: '1', order: 'newest' },
     )
-  }
-  if (options.categories && options.categories.length > 0) {
-    feed = feed.filter((a) =>
-      a.categories.some((c) => options.categories!.includes(c))
-    )
-  }
-  if (options.state) {
-    feed = feed.filter(
-      (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!)
-    )
-  }
 
-  // Sort by recency and impact
-  feed.sort((a, b) => {
-    const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
-    const wA = impactWeight[a.impact_level] ?? 1
-    const wB = impactWeight[b.impact_level] ?? 1
-    if (wA !== wB) return wB - wA
-    const dateA = a.effective_date || a.signing_date || a.publication_date
-    const dateB = b.effective_date || b.signing_date || b.publication_date
-    return new Date(dateB).getTime() - new Date(dateA).getTime()
-  })
+    const res = await fetch(searchUrl)
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = (await res.json()) as FedRegSearchResponse
 
-  return feed.slice(0, options.limit ?? 10)
+    let feed = data.results.map(mapFedRegDocument)
+
+    // Cache results
+    for (const a of feed) {
+      liveActionsCache.set(a.id, a)
+    }
+
+    // Client-side personalization filtering
+    if (options.personas && options.personas.length > 0) {
+      const personalized = feed.filter((a) =>
+        a.affected_personas.some((p) => options.personas!.includes(p)),
+      )
+      // If filtering yields nothing, keep all results rather than returning empty
+      if (personalized.length > 0) feed = personalized
+    }
+    if (options.categories && options.categories.length > 0) {
+      const catFiltered = feed.filter((a) =>
+        a.categories.some((c) => options.categories!.includes(c)),
+      )
+      if (catFiltered.length > 0) feed = catFiltered
+    }
+    if (options.state) {
+      const stateFiltered = feed.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!),
+      )
+      if (stateFiltered.length > 0) feed = stateFiltered
+    }
+
+    // Sort by impact then recency
+    feed.sort((a, b) => {
+      const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      const wA = impactWeight[a.impact_level] ?? 1
+      const wB = impactWeight[b.impact_level] ?? 1
+      if (wA !== wB) return wB - wA
+      const dateA = a.effective_date || a.signing_date || a.publication_date
+      const dateB = b.effective_date || b.signing_date || b.publication_date
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
+    })
+
+    return feed.slice(0, options.limit ?? 10)
+  } catch (err) {
+    console.warn('Federal Register feed API failed, using fallback data:', err)
+
+    let feed = [...FALLBACK_ACTIONS]
+
+    if (options.personas && options.personas.length > 0) {
+      feed = feed.filter((a) =>
+        a.affected_personas.some((p) => options.personas!.includes(p)),
+      )
+    }
+    if (options.categories && options.categories.length > 0) {
+      feed = feed.filter((a) =>
+        a.categories.some((c) => options.categories!.includes(c)),
+      )
+    }
+    if (options.state) {
+      feed = feed.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!),
+      )
+    }
+
+    feed.sort((a, b) => {
+      const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      const wA = impactWeight[a.impact_level] ?? 1
+      const wB = impactWeight[b.impact_level] ?? 1
+      if (wA !== wB) return wB - wA
+      const dateA = a.effective_date || a.signing_date || a.publication_date
+      const dateB = b.effective_date || b.signing_date || b.publication_date
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
+    })
+
+    return feed.slice(0, options.limit ?? 10)
+  }
 }
 
 export function getRelatedActions(actionId: string): GovernmentAction[] {
-  const action = MOCK_ACTIONS.find((a) => a.id === actionId)
+  // Check live cache first
+  const cachedAction = liveActionsCache.get(actionId)
+  if (cachedAction && cachedAction.related_action_ids.length > 0) {
+    return cachedAction.related_action_ids
+      .map((id) => liveActionsCache.get(id) ?? FALLBACK_ACTIONS.find((a) => a.id === id))
+      .filter((a): a is GovernmentAction => a != null)
+  }
+
+  // Fallback
+  const action = FALLBACK_ACTIONS.find((a) => a.id === actionId)
   if (!action) return []
-  return MOCK_ACTIONS.filter((a) => action.related_action_ids.includes(a.id))
+  return FALLBACK_ACTIONS.filter((a) => action.related_action_ids.includes(a.id))
 }

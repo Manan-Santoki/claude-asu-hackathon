@@ -1,5 +1,8 @@
-// BillBreaker API client — mock data layer
-// Replace mock implementations with real API calls when backend is ready
+// BillBreaker API client — Congress.gov live API with mock fallback
+// Uses the Congress.gov v3 API for real bill data
+
+import { useDataSourceStore } from '@/stores/useDataSourceStore'
+const setSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('bills', s)
 
 export interface Bill {
   id: string
@@ -33,10 +36,188 @@ export interface ChatMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Congress.gov API helpers
 // ---------------------------------------------------------------------------
 
-const MOCK_BILLS: Bill[] = [
+const CONGRESS_BASE = 'https://api.congress.gov/v3'
+const CURRENT_CONGRESS = 119
+
+function getApiKey(): string {
+  return import.meta.env.VITE_CONGRESS_GOV_API_KEY ?? ''
+}
+
+// Simple in-memory cache to avoid redundant network calls
+const cache = new Map<string, { data: unknown; ts: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function congressFetch<T>(path: string): Promise<T> {
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    throw new Error('Missing VITE_CONGRESS_GOV_API_KEY')
+  }
+
+  const separator = path.includes('?') ? '&' : '?'
+  const url = `${CONGRESS_BASE}${path}${separator}api_key=${apiKey}&format=json`
+
+  const cached = cache.get(url)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data as T
+  }
+
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Congress.gov API error: ${res.status} ${res.statusText}`)
+  }
+
+  const data = await res.json()
+  cache.set(url, { data, ts: Date.now() })
+  return data as T
+}
+
+// ---------------------------------------------------------------------------
+// Mapping Congress.gov responses to our Bill interface
+// ---------------------------------------------------------------------------
+
+function inferStatus(raw: Record<string, unknown>): Bill['status'] {
+  const latestAction = ((raw.latestAction as Record<string, unknown>)?.text ?? '') as string
+  const lower = latestAction.toLowerCase()
+
+  // Check from most advanced status to least
+  if (lower.includes('became public law') || lower.includes('became law')
+    || lower.includes('signed by president') || lower.includes('signed by the president')) return 'enacted'
+  if (lower.includes('vetoed') || lower.includes('pocket veto')) return 'vetoed'
+  if (lower.includes('presented to president') || lower.includes('presented to the president')
+    || lower.includes('sent to the president') || lower.includes('to the president')
+    || lower.includes('resolving differences') || lower.includes('conference report')) return 'enacted' // effectively about to be enacted
+  if (lower.includes('passed senate') || lower.includes('passed the senate')
+    || lower.includes('agreed to in senate') || lower.includes('senate agreed')
+    || lower.includes('received in the house')) return 'passed_senate'
+  if (lower.includes('passed house') || lower.includes('passed the house')
+    || lower.includes('agreed to in house') || lower.includes('received in the senate')
+    || lower.includes('on passage') && lower.includes('passed')) return 'passed_house'
+  if (lower.includes('placed on') || lower.includes('ordered to be reported')
+    || lower.includes('reported by') || lower.includes('calendar')) return 'in_committee'
+  if (lower.includes('committee') || lower.includes('referred to')
+    || lower.includes('subcommittee') || lower.includes('hearings')) return 'in_committee'
+  return 'introduced'
+}
+
+function inferCategories(raw: Record<string, unknown>): string[] {
+  const title = ((raw.title ?? '') as string).toLowerCase()
+  const cats: string[] = []
+
+  const mapping: Record<string, string[]> = {
+    healthcare: ['health', 'medic', 'drug', 'insulin', 'pharma', 'hospital', 'patient'],
+    education: ['education', 'school', 'student', 'university', 'college', 'pell'],
+    economy: ['tax', 'econom', 'business', 'trade', 'financ', 'budget', 'appropriat', 'employment', 'wage', 'loan'],
+    immigration: ['immigra', 'border', 'asylum', 'visa', 'citizen'],
+    security: ['secur', 'defense', 'militar', 'weapon', 'firearm', 'gun'],
+    climate: ['climate', 'energy', 'emission', 'clean', 'environment', 'pollut'],
+    technology: ['tech', 'cyber', 'artificial intelligence', ' ai ', 'digital', 'data'],
+    housing: ['housing', 'homeless', 'rent', 'mortgage'],
+    veterans: ['veteran'],
+    family: ['child', 'family', 'parent'],
+    tax: ['tax', 'irs', 'internal revenue'],
+  }
+
+  for (const [cat, keywords] of Object.entries(mapping)) {
+    if (keywords.some((kw) => title.includes(kw))) {
+      cats.push(cat)
+    }
+  }
+
+  return cats.length > 0 ? cats : ['general']
+}
+
+function mapCongressBill(raw: Record<string, unknown>): Bill {
+  const billType = ((raw.type ?? '') as string).toLowerCase()
+  const billNumber = Number(raw.number) || 0
+  const congress = Number(raw.congress) || CURRENT_CONGRESS
+  const id = `${billType}-${billNumber}`
+
+  const latestAction = (raw.latestAction ?? {}) as Record<string, unknown>
+  const latestActionDate = (latestAction.actionDate ?? latestAction.date ?? '') as string
+  const latestActionText = (latestAction.text ?? '') as string
+
+  const sponsors = (raw.sponsors ?? []) as Record<string, unknown>[]
+  const sponsor = sponsors.length > 0 ? sponsors[0] : {} as Record<string, unknown>
+  const sponsorFirstName = (sponsor.firstName ?? '') as string
+  const sponsorLastName = (sponsor.lastName ?? '') as string
+  const sponsorParty = (sponsor.party ?? '') as string
+  const sponsorState = (sponsor.state ?? '') as string
+
+  const title = (raw.title ?? 'Untitled Bill') as string
+  const shortTitle = title.length > 80 ? title.slice(0, 77) + '...' : title
+
+  const introducedDate = (raw.introducedDate ?? '') as string
+
+  const policyArea = (raw.policyArea ?? {}) as Record<string, unknown>
+  const policyAreaName = (policyArea.name ?? '') as string
+
+  // Construct a reasonable congress.gov web URL
+  const typeSlug = billType === 'hr' ? 'house-bill'
+    : billType === 's' ? 'senate-bill'
+    : billType === 'hjres' ? 'house-joint-resolution'
+    : billType === 'sjres' ? 'senate-joint-resolution'
+    : billType === 'hconres' ? 'house-concurrent-resolution'
+    : billType === 'sconres' ? 'senate-concurrent-resolution'
+    : billType === 'hres' ? 'house-resolution'
+    : billType === 'sres' ? 'senate-resolution'
+    : 'bill'
+
+  const webUrl = `https://www.congress.gov/bill/${congress}th-congress/${typeSlug}/${billNumber}`
+
+  const status = inferStatus(raw)
+
+  const categories = policyAreaName
+    ? [policyAreaName.toLowerCase().replace(/\s+/g, '_')]
+    : inferCategories(raw)
+
+  const sponsorPrefix = billType === 's' || billType === 'sjres' || billType === 'sconres' || billType === 'sres'
+    ? 'Sen.'
+    : 'Rep.'
+  const sponsorName = sponsorFirstName
+    ? `${sponsorPrefix} ${sponsorFirstName} ${sponsorLastName}`
+    : ''
+
+  return {
+    id,
+    bill_id: `${billType}${billNumber}-${congress}`,
+    bill_type: billType,
+    bill_number: billNumber,
+    congress,
+    title,
+    short_title: shortTitle,
+    sponsor_name: sponsorName,
+    sponsor_party: sponsorParty,
+    sponsor_state: sponsorState,
+    summary_raw: (raw.summary as string) ?? '',
+    summary_ai: '',
+    impact_story: '',
+    status,
+    status_detail: latestActionText,
+    categories,
+    introduced_date: introducedDate,
+    last_action_date: latestActionDate,
+    congress_url: webUrl,
+    full_text: '',
+    impact_personas: {},
+    state_relevance: sponsorState ? [sponsorState] : [],
+    ai_processed: false,
+  }
+}
+
+/** Map a bill from the /bill/{congress}/{type}/{number} detail endpoint */
+function mapCongressBillDetail(raw: Record<string, unknown>): Bill {
+  // The detail endpoint has a slightly different shape: sponsors is fully nested, etc.
+  return mapCongressBill(raw)
+}
+
+// ---------------------------------------------------------------------------
+// Fallback mock data
+// ---------------------------------------------------------------------------
+
+const FALLBACK_BILLS: Bill[] = [
   {
     id: 'hr-1234',
     bill_id: 'hr1234-119',
@@ -449,6 +630,9 @@ const MOCK_BILLS: Bill[] = [
   },
 ]
 
+// In-memory store of all bills we've fetched (live + fallback), keyed by id
+const billStore = new Map<string, Bill>()
+
 // In-memory saved bills (simulates user's saved list)
 let savedBillIds = new Set<string>()
 
@@ -458,6 +642,104 @@ let savedBillIds = new Set<string>()
 
 function delay(ms: number = 300): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Parse a bill id like "hr-1234" into { type: "hr", number: 1234 } */
+function parseBillId(billId: string): { type: string; number: number } | null {
+  const match = billId.match(/^([a-z]+)-(\d+)$/)
+  if (!match) return null
+  return { type: match[1], number: parseInt(match[2], 10) }
+}
+
+// ---------------------------------------------------------------------------
+// State-based bill fetching: get members → get their sponsored bills
+// ---------------------------------------------------------------------------
+
+const stateBillsCache = new Map<string, { data: Bill[]; ts: number }>()
+const STATE_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+
+function parseCongressMemberName(raw: string): { first: string; last: string; display: string } {
+  // Congress.gov returns "Last, First" or "Last, First Middle"
+  const parts = raw.split(',').map(s => s.trim())
+  if (parts.length >= 2) {
+    const last = parts[0]
+    const first = parts[1].split(' ')[0]
+    return { first, last, display: `${first} ${last}` }
+  }
+  return { first: raw, last: '', display: raw }
+}
+
+function parseCongressParty(partyName: string): string {
+  const p = partyName.toLowerCase()
+  if (p.startsWith('dem')) return 'D'
+  if (p.startsWith('rep')) return 'R'
+  return 'I'
+}
+
+async function fetchBillsByState(stateCode: string): Promise<Bill[]> {
+  // Check cache first
+  const cached = stateBillsCache.get(stateCode)
+  if (cached && Date.now() - cached.ts < STATE_CACHE_TTL) {
+    return cached.data
+  }
+
+  // Step 1: Get current members from this state
+  // Congress.gov v3 requires path-based state filter: /member/congress/{congress}/{stateCode}
+  const memberData = await congressFetch<{ members: Record<string, unknown>[] }>(
+    `/member/congress/${CURRENT_CONGRESS}/${stateCode}?limit=50`
+  )
+  const members = memberData.members ?? []
+  if (members.length === 0) throw new Error('No members found for state')
+
+  // Step 2: For each member, get their sponsored legislation (parallel, limit to first 8 members)
+  const memberSlice = members.slice(0, 8)
+  const allBills: Bill[] = []
+  const seen = new Set<string>()
+
+  await Promise.all(
+    memberSlice.map(async (m) => {
+      const bioguideId = (m.bioguideId ?? '') as string
+      if (!bioguideId) return
+
+      // Congress.gov returns name as "Last, First" format
+      const nameStr = (m.name ?? '') as string
+      const { display: sponsorName } = parseCongressMemberName(nameStr)
+      const partyCode = parseCongressParty((m.partyName ?? '') as string)
+
+      // Determine title prefix from terms
+      const terms = m.terms as { item?: { chamber?: string }[] } | undefined
+      const chamber = terms?.item?.[0]?.chamber ?? ''
+      const prefix = chamber === 'Senate' ? 'Sen.' : 'Rep.'
+
+      try {
+        const legData = await congressFetch<{ sponsoredLegislation: Record<string, unknown>[] }>(
+          `/member/${bioguideId}/sponsored-legislation?limit=10&sort=updateDate+desc`
+        )
+        const bills = legData.sponsoredLegislation ?? []
+        for (const raw of bills) {
+          const bill = mapCongressBill(raw)
+          if (seen.has(bill.id)) continue
+          seen.add(bill.id)
+          // Enrich with sponsor info from the member data
+          bill.sponsor_name = `${prefix} ${sponsorName}`
+          bill.sponsor_party = partyCode
+          bill.sponsor_state = stateCode
+          bill.state_relevance = [stateCode]
+          allBills.push(bill)
+        }
+      } catch {
+        // Skip this member on error
+      }
+    })
+  )
+
+  // Sort by latest action date
+  allBills.sort((a, b) =>
+    new Date(b.last_action_date || '').getTime() - new Date(a.last_action_date || '').getTime()
+  )
+
+  stateBillsCache.set(stateCode, { data: allBills, ts: Date.now() })
+  return allBills
 }
 
 // ---------------------------------------------------------------------------
@@ -471,9 +753,65 @@ export async function getBills(filters: {
   search?: string
   page?: number
 } = {}): Promise<{ bills: Bill[]; total: number; page: number; pageSize: number }> {
+  const page = filters.page ?? 1
+  const pageSize = 6
+
+  // Try live API first
+  setSource('loading')
+  try {
+    let liveBills: Bill[]
+
+    if (filters.state) {
+      // State filter: get members from that state, then their sponsored legislation
+      liveBills = await fetchBillsByState(filters.state)
+    } else {
+      // No state filter: get latest national bills
+      const offset = (page - 1) * pageSize
+      const data = await congressFetch<{ bills: Record<string, unknown>[]; pagination?: Record<string, unknown> }>(
+        `/bill?limit=50&offset=${offset}&sort=updateDate+desc`
+      )
+      liveBills = (data.bills ?? []).map((raw) => mapCongressBill(raw))
+    }
+
+    // Store all fetched bills for later detail lookups
+    for (const b of liveBills) {
+      billStore.set(b.id, b)
+    }
+
+    // Apply remaining client-side filters
+    if (filters.category) {
+      liveBills = liveBills.filter((b) => b.categories.includes(filters.category!))
+    }
+    if (filters.status) {
+      liveBills = liveBills.filter((b) => b.status === filters.status)
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase()
+      liveBills = liveBills.filter(
+        (b) =>
+          b.title.toLowerCase().includes(q) ||
+          b.short_title.toLowerCase().includes(q) ||
+          b.sponsor_name.toLowerCase().includes(q)
+      )
+    }
+
+    // Paginate client-side after filtering
+    const total = liveBills.length
+    const start = (page - 1) * pageSize
+    const paged = liveBills.slice(start, start + pageSize)
+
+    setSource('live')
+    return { bills: paged, total, page, pageSize }
+  } catch (_err) {
+    // Fallback to mock data
+    console.warn('Congress.gov API unavailable, using fallback data:', _err)
+    setSource('demo')
+  }
+
+  // Fallback path
   await delay(400)
 
-  let filtered = [...MOCK_BILLS]
+  let filtered = [...FALLBACK_BILLS]
 
   if (filters.state) {
     filtered = filtered.filter((b) => b.state_relevance.includes(filters.state!))
@@ -495,8 +833,6 @@ export async function getBills(filters: {
     )
   }
 
-  const page = filters.page ?? 1
-  const pageSize = 6
   const start = (page - 1) * pageSize
   const paged = filtered.slice(start, start + pageSize)
 
@@ -504,35 +840,110 @@ export async function getBills(filters: {
 }
 
 export async function getBillDetail(billId: string): Promise<Bill | null> {
-  await delay(300)
+  // Handle "latest" — fetch the most recent bill
   if (billId === 'latest') {
-    const sorted = [...MOCK_BILLS].sort(
+    try {
+      const data = await congressFetch<{ bills: Record<string, unknown>[] }>(
+        '/bill?limit=1&sort=updateDate+desc'
+      )
+      const rawBills = data.bills ?? []
+      if (rawBills.length > 0) {
+        const bill = mapCongressBill(rawBills[0])
+        billStore.set(bill.id, bill)
+        return bill
+      }
+    } catch (_err) {
+      console.warn('Congress.gov API unavailable for latest bill, using fallback:', _err)
+    }
+
+    // Fallback: return most recent mock bill
+    const sorted = [...FALLBACK_BILLS].sort(
       (a, b) => new Date(b.last_action_date).getTime() - new Date(a.last_action_date).getTime()
     )
     return sorted[0] ?? null
   }
-  return MOCK_BILLS.find((b) => b.id === billId) ?? null
+
+  // Try live API for a specific bill
+  const parsed = parseBillId(billId)
+  if (parsed) {
+    try {
+      const data = await congressFetch<{ bill: Record<string, unknown> }>(
+        `/bill/${CURRENT_CONGRESS}/${parsed.type}/${parsed.number}`
+      )
+      if (data.bill) {
+        const bill = mapCongressBillDetail(data.bill)
+        billStore.set(bill.id, bill)
+        return bill
+      }
+    } catch (_err) {
+      console.warn(`Congress.gov API unavailable for bill ${billId}, trying store/fallback:`, _err)
+    }
+  }
+
+  // Check in-memory store (may have been fetched via getBills)
+  const stored = billStore.get(billId)
+  if (stored) return stored
+
+  // Fallback to mock data
+  return FALLBACK_BILLS.find((b) => b.id === billId) ?? null
 }
 
 export async function getBillImpact(
   billId: string,
   personas: string[]
 ): Promise<Record<string, string>> {
-  await delay(500)
-  const bill = MOCK_BILLS.find((b) => b.id === billId)
-  if (!bill) return {}
+  // Check if we have a fallback bill with rich impact data first
+  const fallbackBill = FALLBACK_BILLS.find((b) => b.id === billId)
+  if (fallbackBill && Object.keys(fallbackBill.impact_personas).length > 0) {
+    await delay(300)
+    const result: Record<string, string> = {}
+    for (const p of personas) {
+      result[p] = fallbackBill.impact_personas[p] ?? 'No specific impact analysis available for this persona.'
+    }
+    return result
+  }
 
+  // For live API bills without impact data, check the bill store
+  const storedBill = billStore.get(billId)
+  if (storedBill && Object.keys(storedBill.impact_personas).length > 0) {
+    const result: Record<string, string> = {}
+    for (const p of personas) {
+      result[p] = storedBill.impact_personas[p] ?? 'No specific impact analysis available for this persona.'
+    }
+    return result
+  }
+
+  // Generate sensible defaults for live API bills
+  const bill = storedBill ?? (await getBillDetail(billId))
   const result: Record<string, string> = {}
   for (const p of personas) {
-    result[p] = bill.impact_personas[p] ?? 'No specific impact analysis available for this persona.'
+    result[p] = bill
+      ? `Impact analysis for the "${bill.short_title}" on ${p}s is not yet available. This bill is categorized under ${bill.categories.join(', ')}.`
+      : 'No specific impact analysis available for this persona.'
   }
   return result
 }
 
 export async function getBillStory(billId: string): Promise<string> {
-  await delay(400)
-  const bill = MOCK_BILLS.find((b) => b.id === billId)
-  return bill?.impact_story ?? 'No impact story available for this bill.'
+  // Check fallback bills for rich story data
+  const fallbackBill = FALLBACK_BILLS.find((b) => b.id === billId)
+  if (fallbackBill && fallbackBill.impact_story) {
+    await delay(300)
+    return fallbackBill.impact_story
+  }
+
+  // Check the bill store
+  const storedBill = billStore.get(billId)
+  if (storedBill && storedBill.impact_story) {
+    return storedBill.impact_story
+  }
+
+  // For live API bills, return a sensible default
+  const bill = storedBill ?? (await getBillDetail(billId))
+  if (bill) {
+    return `"${bill.short_title}" (${bill.bill_type.toUpperCase()} ${bill.bill_number}) was introduced on ${bill.introduced_date} by ${bill.sponsor_name || 'Congress'}. Current status: ${bill.status_detail || bill.status}. This bill falls under the categories: ${bill.categories.join(', ')}.`
+  }
+  return 'No impact story available for this bill.'
 }
 
 export async function chatWithBill(
@@ -542,7 +953,11 @@ export async function chatWithBill(
 ): Promise<{ response: string }> {
   await delay(800)
 
-  const bill = MOCK_BILLS.find((b) => b.id === billId)
+  // Try to find the bill from any source
+  const bill = FALLBACK_BILLS.find((b) => b.id === billId)
+    ?? billStore.get(billId)
+    ?? null
+
   if (!bill) return { response: 'Sorry, I could not find that bill.' }
 
   const lowerMsg = message.toLowerCase()
@@ -550,17 +965,17 @@ export async function chatWithBill(
   // Simple keyword-based responses for demo
   if (lowerMsg.includes('cost') || lowerMsg.includes('money') || lowerMsg.includes('price') || lowerMsg.includes('spend')) {
     return {
-      response: `Great question about the financial aspects of the ${bill.short_title}. ${bill.summary_ai.split('.').slice(-3).join('.')} Feel free to ask about specific cost impacts for different groups.`,
+      response: `Great question about the financial aspects of the ${bill.short_title}. ${bill.summary_ai ? bill.summary_ai.split('.').slice(-3).join('.') : 'Detailed cost analysis is not yet available for this bill.'} Feel free to ask about specific cost impacts for different groups.`,
     }
   }
   if (lowerMsg.includes('who') && (lowerMsg.includes('sponsor') || lowerMsg.includes('wrote') || lowerMsg.includes('author'))) {
     return {
-      response: `The ${bill.short_title} was sponsored by ${bill.sponsor_name} (${bill.sponsor_party}-${bill.sponsor_state}). It was introduced on ${bill.introduced_date} and is currently ${bill.status.replace('_', ' ')}.`,
+      response: `The ${bill.short_title} was sponsored by ${bill.sponsor_name || 'a member of Congress'} (${bill.sponsor_party || '?'}-${bill.sponsor_state || '?'}). It was introduced on ${bill.introduced_date} and is currently ${bill.status.replace('_', ' ')}.`,
     }
   }
   if (lowerMsg.includes('status') || lowerMsg.includes('pass') || lowerMsg.includes('vote')) {
     return {
-      response: `Current status: ${bill.status_detail}. The bill was introduced on ${bill.introduced_date} and last saw action on ${bill.last_action_date}.`,
+      response: `Current status: ${bill.status_detail || bill.status}. The bill was introduced on ${bill.introduced_date} and last saw action on ${bill.last_action_date}.`,
     }
   }
   if (lowerMsg.includes('oppose') || lowerMsg.includes('against') || lowerMsg.includes('criticism')) {
@@ -570,12 +985,12 @@ export async function chatWithBill(
   }
   if (lowerMsg.includes('support') || lowerMsg.includes('favor') || lowerMsg.includes('benefit')) {
     return {
-      response: `Supporters of the ${bill.short_title} argue it addresses a critical need in ${bill.categories[0]}. ${bill.impact_story.split('.')[0]}. The bill has backing from both advocacy groups and some bipartisan lawmakers.`,
+      response: `Supporters of the ${bill.short_title} argue it addresses a critical need in ${bill.categories[0]}. ${bill.impact_story ? bill.impact_story.split('.')[0] + '.' : 'The bill has broad implications.'} The bill has backing from both advocacy groups and some bipartisan lawmakers.`,
     }
   }
 
   return {
-    response: `The ${bill.short_title} is a ${bill.bill_type === 'hr' ? 'House' : 'Senate'} bill focused on ${bill.categories.join(', ')}. ${bill.summary_ai.split('.').slice(0, 2).join('.')}. What specific aspect would you like to know more about?`,
+    response: `The ${bill.short_title} is a ${bill.bill_type === 'hr' ? 'House' : 'Senate'} bill focused on ${bill.categories.join(', ')}. ${bill.summary_ai ? bill.summary_ai.split('.').slice(0, 2).join('.') + '.' : bill.title} What specific aspect would you like to know more about?`,
   }
 }
 
@@ -591,7 +1006,15 @@ export async function unsaveBill(billId: string): Promise<void> {
 
 export async function getSavedBills(): Promise<Bill[]> {
   await delay(300)
-  return MOCK_BILLS.filter((b) => savedBillIds.has(b.id))
+  const results: Bill[] = []
+  for (const id of savedBillIds) {
+    // Check fallback first, then bill store
+    const fallback = FALLBACK_BILLS.find((b) => b.id === id)
+    const stored = billStore.get(id)
+    const bill = fallback ?? stored
+    if (bill) results.push(bill)
+  }
+  return results
 }
 
 export function getSavedBillIdsSync(): Set<string> {
@@ -603,7 +1026,7 @@ export async function getRepsVoted(
 ): Promise<{ name: string; party: string; position: string; memberId: string }[]> {
   await delay(400)
 
-  const bill = MOCK_BILLS.find((b) => b.id === billId)
+  const bill = FALLBACK_BILLS.find((b) => b.id === billId) ?? billStore.get(billId)
   if (!bill) return []
 
   // Only return vote records for bills that have passed at least one chamber

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ComposableMap,
   Geographies,
@@ -12,50 +12,26 @@ import MapControls from '@/components/map/MapControls'
 import { useMapStore } from '@/stores/useMapStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { getStateByFips } from '@/lib/states'
-import { type StateStats } from '@/api/map'
+import { getStateStats, type StateStats } from '@/api/map'
+import DataSourceBadge from '@/components/shared/DataSourceBadge'
 
 const GEO_URL = '/us-states-topo.json'
-
-// Mock stats keyed by state code for quick lookup
-const MOCK_STATS: Record<string, StateStats> = {
-  CA: { code: 'CA', billCount: 42, partyControl: 'D', civicScore: 78 },
-  TX: { code: 'TX', billCount: 38, partyControl: 'R', civicScore: 65 },
-  NY: { code: 'NY', billCount: 35, partyControl: 'D', civicScore: 82 },
-  FL: { code: 'FL', billCount: 31, partyControl: 'R', civicScore: 60 },
-  IL: { code: 'IL', billCount: 28, partyControl: 'D', civicScore: 71 },
-  PA: { code: 'PA', billCount: 25, partyControl: 'split', civicScore: 68 },
-  OH: { code: 'OH', billCount: 22, partyControl: 'R', civicScore: 62 },
-  GA: { code: 'GA', billCount: 20, partyControl: 'R', civicScore: 58 },
-  NC: { code: 'NC', billCount: 19, partyControl: 'R', civicScore: 59 },
-  MI: { code: 'MI', billCount: 18, partyControl: 'D', civicScore: 70 },
-  AZ: { code: 'AZ', billCount: 17, partyControl: 'split', civicScore: 64 },
-  WA: { code: 'WA', billCount: 16, partyControl: 'D', civicScore: 76 },
-  MA: { code: 'MA', billCount: 15, partyControl: 'D', civicScore: 85 },
-  VA: { code: 'VA', billCount: 14, partyControl: 'split', civicScore: 72 },
-  CO: { code: 'CO', billCount: 13, partyControl: 'D', civicScore: 74 },
-  MN: { code: 'MN', billCount: 12, partyControl: 'D', civicScore: 80 },
-  NJ: { code: 'NJ', billCount: 12, partyControl: 'D', civicScore: 69 },
-  TN: { code: 'TN', billCount: 11, partyControl: 'R', civicScore: 55 },
-  IN: { code: 'IN', billCount: 10, partyControl: 'R', civicScore: 57 },
-  MO: { code: 'MO', billCount: 10, partyControl: 'R', civicScore: 56 },
-}
-
-const MAX_BILL_COUNT = 42
 
 function getStateFill(
   stateCode: string,
   colorMode: string,
+  statsMap: Record<string, StateStats>,
+  maxBills: number,
   _homeState?: string
 ): string {
-  const stats = MOCK_STATS[stateCode]
+  const stats = statsMap[stateCode]
 
   if (colorMode === 'bill_activity') {
-    if (!stats) return '#eff6ff' // very light blue for states with no data
-    const intensity = stats.billCount / MAX_BILL_COUNT
-    // Light blue (#bfdbfe) to dark blue (#1e40af)
-    const r = Math.round(191 - intensity * 161) // 191 -> 30
-    const g = Math.round(219 - intensity * 155) // 219 -> 64
-    const b = Math.round(254 - intensity * 79)  // 254 -> 175
+    if (!stats) return '#eff6ff'
+    const intensity = maxBills > 0 ? stats.billCount / maxBills : 0
+    const r = Math.round(191 - intensity * 161)
+    const g = Math.round(219 - intensity * 155)
+    const b = Math.round(254 - intensity * 79)
     return `rgb(${r}, ${g}, ${b})`
   }
 
@@ -69,9 +45,9 @@ function getStateFill(
   if (colorMode === 'civic_score') {
     if (!stats) return '#dcfce7'
     const intensity = stats.civicScore / 100
-    const r = Math.round(187 - intensity * 166) // 187 -> 21
-    const g = Math.round(247 - intensity * 119) // 247 -> 128
-    const b = Math.round(208 - intensity * 147) // 208 -> 61
+    const r = Math.round(187 - intensity * 166)
+    const g = Math.round(247 - intensity * 119)
+    const b = Math.round(208 - intensity * 147)
     return `rgb(${r}, ${g}, ${b})`
   }
 
@@ -81,12 +57,32 @@ function getStateFill(
 export default function USAMap() {
   const colorMode = useMapStore((s) => s.colorMode)
   const setSelectedState = useMapStore((s) => s.setSelectedState)
-  const setHoveredState = useMapStore((s) => s.setHoveredState)
   const user = useAuthStore((s) => s.user)
   const homeState = user?.state_code
 
   const [tooltipContent, setTooltipContent] = useState('')
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+
+  // Stats from DB
+  const [statsMap, setStatsMap] = useState<Record<string, StateStats>>({})
+  const [maxBills, setMaxBills] = useState(1)
+  const fetchedRef = useRef(false)
+
+  useEffect(() => {
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+
+    getStateStats().then((stats) => {
+      const map: Record<string, StateStats> = {}
+      let max = 0
+      for (const s of stats) {
+        map[s.code] = s
+        if (s.billCount > max) max = s.billCount
+      }
+      setStatsMap(map)
+      setMaxBills(max || 1)
+    })
+  }, [])
 
   const handleClick = useCallback(
     (fips: string) => {
@@ -102,19 +98,19 @@ export default function USAMap() {
     (fips: string) => {
       const state = getStateByFips(fips)
       if (state) {
-        setHoveredState(state.code)
-        const stats = MOCK_STATS[state.code]
+        const stats = statsMap[state.code]
         const billCount = stats?.billCount ?? 0
-        setTooltipContent(`${state.name} — ${billCount} bills active`)
+        setTooltipContent(
+          `${state.name} — ${billCount.toLocaleString()} bills this year`
+        )
       }
     },
-    [setHoveredState]
+    [statsMap]
   )
 
   const handleMouseLeave = useCallback(() => {
-    setHoveredState(null)
     setTooltipContent('')
-  }, [setHoveredState])
+  }, [])
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -133,6 +129,9 @@ export default function USAMap() {
       >
         <MapControls />
         <MapLegend />
+        <div className="absolute top-3 left-3 z-10">
+          <DataSourceBadge sourceKey="map" />
+        </div>
 
         <ComposableMap
           projection="geoAlbersUsa"
@@ -146,7 +145,13 @@ export default function USAMap() {
                   const state = getStateByFips(fips)
                   const stateCode = state?.code ?? ''
                   const isHome = homeState === stateCode
-                  const fill = getStateFill(stateCode, colorMode, homeState)
+                  const fill = getStateFill(
+                    stateCode,
+                    colorMode,
+                    statsMap,
+                    maxBills,
+                    homeState
+                  )
 
                   return (
                     <Geography

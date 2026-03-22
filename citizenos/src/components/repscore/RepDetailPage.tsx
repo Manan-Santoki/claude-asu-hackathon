@@ -82,9 +82,9 @@ export default function RepDetailPage() {
         variant="ghost"
         size="sm"
         className="mb-4"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/reps')}
       >
-        <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        <ArrowLeft className="h-4 w-4 mr-1" /> Back to Reps
       </Button>
 
       <div className="space-y-6">

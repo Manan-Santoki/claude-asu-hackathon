@@ -1,5 +1,12 @@
-// RepScore API client — mock data layer
-// Replace mock implementations with real API calls when backend is ready
+// RepScore API client — live Congress.gov + Google Civic enrichment, mock fallback
+// Uses Congress.gov v3 API and Google Civic Information API
+
+import { useDataSourceStore } from '@/stores/useDataSourceStore'
+const setRepSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('reps', s)
+
+// ---------------------------------------------------------------------------
+// Interfaces (unchanged)
+// ---------------------------------------------------------------------------
 
 export interface Representative {
   id: string
@@ -76,7 +83,194 @@ export interface SponsoredBill {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Congress.gov API helpers
+// ---------------------------------------------------------------------------
+
+const CONGRESS_BASE = 'https://api.congress.gov/v3'
+const CURRENT_CONGRESS = 119
+
+function getCongressApiKey(): string {
+  return import.meta.env.VITE_CONGRESS_GOV_API_KEY ?? ''
+}
+
+function getGoogleCivicApiKey(): string {
+  return import.meta.env.VITE_GOOGLE_CIVIC_API_KEY ?? ''
+}
+
+/** Typed fetch wrapper for Congress.gov v3 API */
+async function congressFetch<T>(path: string): Promise<T> {
+  const apiKey = getCongressApiKey()
+  if (!apiKey) throw new Error('Missing VITE_CONGRESS_GOV_API_KEY')
+
+  const separator = path.includes('?') ? '&' : '?'
+  const url = `${CONGRESS_BASE}${path}${separator}api_key=${apiKey}&format=json`
+
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Congress.gov API error: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// ---------------------------------------------------------------------------
+// Google Civic API helper
+// ---------------------------------------------------------------------------
+
+interface CivicOfficial {
+  name: string
+  party?: string
+  phones?: string[]
+  emails?: string[]
+  urls?: string[]
+  channels?: { type: string; id: string }[]
+  address?: { line1: string; city: string; state: string; zip: string }[]
+}
+
+interface CivicResponse {
+  officials: CivicOfficial[]
+}
+
+/** In-memory cache so we don't call Google Civic repeatedly for the same state */
+const civicCache: Record<string, CivicOfficial[]> = {}
+
+const STATE_NAMES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia', AS: 'American Samoa', GU: 'Guam', MP: 'Northern Mariana Islands',
+  PR: 'Puerto Rico', VI: 'Virgin Islands',
+}
+
+async function fetchCivicOfficials(stateCode: string): Promise<CivicOfficial[]> {
+  if (civicCache[stateCode]) return civicCache[stateCode]
+
+  const apiKey = getGoogleCivicApiKey()
+  if (!apiKey) return []
+
+  const stateName = STATE_NAMES[stateCode.toUpperCase()] ?? stateCode
+  const url = `https://www.googleapis.com/civicinfo/v2/representatives?address=${encodeURIComponent(stateName)}&key=${apiKey}`
+
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data: CivicResponse = await res.json()
+    civicCache[stateCode] = data.officials ?? []
+    return civicCache[stateCode]
+  } catch {
+    return []
+  }
+}
+
+function findCivicMatch(officials: CivicOfficial[], firstName: string, lastName: string): CivicOfficial | undefined {
+  const lastLower = lastName.toLowerCase()
+  const firstLower = firstName.toLowerCase()
+  return officials.find((o) => {
+    const nameLower = o.name.toLowerCase()
+    return nameLower.includes(lastLower) && nameLower.includes(firstLower)
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Mapping: Congress.gov member -> Representative
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function mapParty(partyName: string | undefined): 'D' | 'R' | 'I' {
+  if (!partyName) return 'I'
+  const p = partyName.toLowerCase()
+  if (p.startsWith('democrat')) return 'D'
+  if (p.startsWith('republican')) return 'R'
+  return 'I'
+}
+
+function mapChamber(chamber: string | undefined): 'senate' | 'house' {
+  if (!chamber) return 'house'
+  return chamber.toLowerCase().includes('senate') ? 'senate' : 'house'
+}
+
+function mapCongressMember(raw: any, enrichment?: CivicOfficial): Representative {
+  const bioguideId: string = raw.bioguideId ?? raw.member?.bioguideId ?? ''
+  const firstName: string = raw.firstName ?? raw.member?.firstName ?? ''
+  const lastName: string = raw.lastName ?? raw.member?.lastName ?? ''
+  const fullName: string = raw.name ?? raw.member?.name ?? `${firstName} ${lastName}`
+  const partyName: string = raw.partyName ?? raw.member?.partyName ?? ''
+  const state: string = raw.state ?? raw.member?.state ?? ''
+  const district: number | null = raw.district ?? raw.member?.district ?? null
+  const chamber: string = raw.terms?.item?.[0]?.chamber ?? raw.member?.terms?.item?.[0]?.chamber ?? ''
+  const depiction = raw.depiction ?? raw.member?.depiction ?? {}
+  const url: string = raw.url ?? raw.member?.url ?? ''
+
+  const resolvedChamber = mapChamber(chamber)
+  const stateCode = typeof state === 'string' ? state : ''
+
+  // Determine next election year based on chamber
+  const currentYear = new Date().getFullYear()
+  let nextElection = ''
+  if (resolvedChamber === 'senate') {
+    // Senate terms are 6 years; approximate next election
+    const remainder = currentYear % 6
+    const nextSenateYear = currentYear + (6 - (remainder % 6)) % 6 || currentYear
+    nextElection = String(nextSenateYear % 2 === 0 ? nextSenateYear : nextSenateYear + 1)
+  } else {
+    // House members face election every 2 years
+    nextElection = currentYear % 2 === 0 ? String(currentYear) : String(currentYear + 1)
+  }
+
+  // Enrichment from Google Civic API
+  const phone = enrichment?.phones?.[0] ?? ''
+  const email = enrichment?.emails?.[0] ?? ''
+  const civicUrl = enrichment?.urls?.[0] ?? ''
+  const civicAddress = enrichment?.address?.[0]
+  const officeAddress = civicAddress
+    ? `${civicAddress.line1}, ${civicAddress.city}, ${civicAddress.state} ${civicAddress.zip}`
+    : ''
+
+  const socialLinks: { twitter?: string; facebook?: string; youtube?: string } = {}
+  if (enrichment?.channels) {
+    for (const ch of enrichment.channels) {
+      const t = ch.type.toLowerCase()
+      if (t === 'twitter') socialLinks.twitter = ch.id
+      else if (t === 'facebook') socialLinks.facebook = ch.id
+      else if (t === 'youtube') socialLinks.youtube = ch.id
+    }
+  }
+
+  return {
+    id: bioguideId,
+    member_id: bioguideId,
+    name: fullName,
+    first_name: firstName,
+    last_name: lastName,
+    party: mapParty(partyName),
+    state_code: stateCode,
+    district: district != null ? `${stateCode}-${district}` : null,
+    chamber: resolvedChamber,
+    title: resolvedChamber === 'senate' ? 'Senator' : 'Representative',
+    in_office: true,
+    photo_url: depiction?.imageUrl ?? `https://bioguide.congress.gov/bioguide/photo/${bioguideId.charAt(0)}/${bioguideId}.jpg`,
+    phone,
+    email,
+    website: url || civicUrl,
+    office_address: officeAddress,
+    social_links: socialLinks,
+    votes_with_party_pct: 0,
+    missed_votes_pct: 0,
+    bills_sponsored: 0,
+    bills_cosponsored: 0,
+    next_election: nextElection,
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---------------------------------------------------------------------------
+// Mock data (fallback)
 // ---------------------------------------------------------------------------
 
 const MOCK_REPS: Representative[] = [
@@ -360,33 +554,6 @@ const MOCK_PROMISES: CampaignPromise[] = [
   { id: 'p32', member_id: 'S001211', promise_text: 'Lower healthcare costs for Arizona families', category: 'healthcare', source_url: 'https://stanton.house.gov/issues/healthcare', status: 'kept', evidence: 'Voted Yes on Affordable Insulin Now Act (HR.1234). Passed the House.', related_vote_ids: ['roll-401'] },
 ]
 
-function computeScores(memberId: string): RepScores {
-  const rep = MOCK_REPS.find((r) => r.member_id === memberId)
-  const promises = MOCK_PROMISES.filter((p) => p.member_id === memberId)
-
-  const kept = promises.filter((p) => p.status === 'kept').length
-  const broken = promises.filter((p) => p.status === 'broken').length
-  const inProgress = promises.filter((p) => p.status === 'in_progress').length
-  const notAddressed = promises.filter((p) => p.status === 'not_yet_addressed').length
-  const scored = kept + broken + inProgress
-  const promiseAlignment = scored > 0 ? Math.round(((kept * 1.0 + inProgress * 0.5) / scored) * 100) : 0
-  const partyLoyalty = rep?.votes_with_party_pct ?? 0
-  const attendance = rep ? Math.round(100 - rep.missed_votes_pct) : 0
-  const overall = Math.round(promiseAlignment * 0.5 + attendance * 0.3 + partyLoyalty * 0.2)
-
-  return {
-    member_id: memberId,
-    promise_alignment_score: promiseAlignment,
-    promises_kept: kept,
-    promises_broken: broken,
-    promises_in_progress: inProgress,
-    promises_not_addressed: notAddressed,
-    party_loyalty_score: partyLoyalty,
-    attendance_score: attendance,
-    overall_accountability_score: overall,
-  }
-}
-
 const MOCK_SPONSORED_BILLS: Record<string, SponsoredBill[]> = {
   S001217: [
     { bill_id: 's910-119', title: 'Student Loan Relief and Education Affordability Act', status: 'introduced', introduced_date: '2026-03-01', role: 'sponsor' },
@@ -416,15 +583,114 @@ const MOCK_SPONSORED_BILLS: Record<string, SponsoredBill[]> = {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Score computation (unchanged — works with whatever promise data we have)
 // ---------------------------------------------------------------------------
 
-function delay(ms: number = 300): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function computeScores(memberId: string, reps: Representative[], promises: CampaignPromise[]): RepScores {
+  const rep = reps.find((r) => r.member_id === memberId)
+  const memberPromises = promises.filter((p) => p.member_id === memberId)
+
+  const kept = memberPromises.filter((p) => p.status === 'kept').length
+  const broken = memberPromises.filter((p) => p.status === 'broken').length
+  const inProgress = memberPromises.filter((p) => p.status === 'in_progress').length
+  const notAddressed = memberPromises.filter((p) => p.status === 'not_yet_addressed').length
+  const scored = kept + broken + inProgress
+  const promiseAlignment = scored > 0 ? Math.round(((kept * 1.0 + inProgress * 0.5) / scored) * 100) : 0
+  const partyLoyalty = rep?.votes_with_party_pct ?? 0
+  const attendance = rep ? Math.round(100 - rep.missed_votes_pct) : 0
+  const overall = Math.round(promiseAlignment * 0.5 + attendance * 0.3 + partyLoyalty * 0.2)
+
+  return {
+    member_id: memberId,
+    promise_alignment_score: promiseAlignment,
+    promises_kept: kept,
+    promises_broken: broken,
+    promises_in_progress: inProgress,
+    promises_not_addressed: notAddressed,
+    party_loyalty_score: partyLoyalty,
+    attendance_score: attendance,
+    overall_accountability_score: overall,
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Public API functions
+// Live API: fetch & enrich members
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+async function fetchAndMapMembers(apiPath: string): Promise<Representative[]> {
+  const data = await congressFetch<{ members: any[] }>(apiPath)
+  const members: any[] = data.members ?? []
+  if (members.length === 0) return []
+
+  // Collect unique state codes for Civic enrichment
+  const stateCodes = new Set<string>()
+  for (const m of members) {
+    const sc: string = m.state ?? ''
+    if (sc) stateCodes.add(sc)
+  }
+
+  // Fetch Civic data for all relevant states in parallel
+  const civicByState: Record<string, CivicOfficial[]> = {}
+  await Promise.all(
+    Array.from(stateCodes).map(async (sc) => {
+      civicByState[sc] = await fetchCivicOfficials(sc)
+    })
+  )
+
+  return members.map((m) => {
+    const sc: string = m.state ?? ''
+    const firstName: string = m.firstName ?? ''
+    const lastName: string = m.lastName ?? ''
+    const civic = civicByState[sc] ? findCivicMatch(civicByState[sc], firstName, lastName) : undefined
+    return mapCongressMember(m, civic)
+  })
+}
+
+async function fetchAndMapMemberDetail(bioguideId: string): Promise<Representative> {
+  const data = await congressFetch<{ member: any }>(`/member/${bioguideId}`)
+  const raw = data.member ?? data
+
+  const sc: string = raw.state ?? ''
+  const firstName: string = raw.firstName ?? ''
+  const lastName: string = raw.lastName ?? ''
+
+  let civic: CivicOfficial | undefined
+  if (sc) {
+    const officials = await fetchCivicOfficials(sc)
+    civic = findCivicMatch(officials, firstName, lastName)
+  }
+
+  // Get sponsored and cosponsored legislation counts
+  let sponsoredCount = 0
+  let cosponsoredCount = 0
+  try {
+    const [sponsoredData, cosponsoredData] = await Promise.all([
+      congressFetch<{ sponsoredLegislation?: any[]; pagination?: { count?: number } }>(
+        `/member/${bioguideId}/sponsored-legislation?limit=1`
+      ),
+      congressFetch<{ cosponsoredLegislation?: any[]; pagination?: { count?: number } }>(
+        `/member/${bioguideId}/cosponsored-legislation?limit=1`
+      ),
+    ])
+    sponsoredCount = sponsoredData.pagination?.count ?? 0
+    cosponsoredCount = cosponsoredData.pagination?.count ?? 0
+  } catch {
+    // counts stay 0
+  }
+
+  const rep = mapCongressMember(raw, civic)
+  rep.bills_sponsored = sponsoredCount
+  rep.bills_cosponsored = cosponsoredCount
+
+  return rep
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---------------------------------------------------------------------------
+// Public API functions (signatures unchanged)
 // ---------------------------------------------------------------------------
 
 export async function getReps(filters: {
@@ -432,40 +698,75 @@ export async function getReps(filters: {
   chamber?: 'senate' | 'house'
   search?: string
 } = {}): Promise<Representative[]> {
-  await delay(400)
+  setRepSource('loading')
+  try {
+    // Build Congress.gov query path
+    // Congress.gov v3 requires path-based state filter: /member/congress/{congress}/{stateCode}
+    let path: string
+    if (filters.state) {
+      path = `/member/congress/${119}/${encodeURIComponent(filters.state)}?currentMember=true&limit=250`
+    } else {
+      path = `/member?currentMember=true&limit=250`
+    }
+    let results = await fetchAndMapMembers(path)
 
-  let filtered = [...MOCK_REPS]
+    // Apply chamber filter (Congress.gov doesn't support chamber in query)
+    if (filters.chamber) {
+      results = results.filter((r) => r.chamber === filters.chamber)
+    }
 
-  if (filters.state) {
-    filtered = filtered.filter((r) => r.state_code === filters.state)
-  }
-  if (filters.chamber) {
-    filtered = filtered.filter((r) => r.chamber === filters.chamber)
-  }
-  if (filters.search) {
-    const q = filters.search.toLowerCase()
-    filtered = filtered.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.state_code.toLowerCase().includes(q) ||
-        r.district?.toLowerCase().includes(q)
-    )
-  }
+    // Apply search filter
+    if (filters.search) {
+      const q = filters.search.toLowerCase()
+      results = results.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.state_code.toLowerCase().includes(q) ||
+          r.district?.toLowerCase().includes(q)
+      )
+    }
 
-  return filtered
+    setRepSource('live')
+    return results
+  } catch (err) {
+    console.warn('Congress.gov API failed for getReps, falling back to mock data:', err)
+    setRepSource('demo')
+
+    // Fallback to mock data with same filtering logic
+    let filtered = [...MOCK_REPS]
+    if (filters.state) {
+      filtered = filtered.filter((r) => r.state_code === filters.state)
+    }
+    if (filters.chamber) {
+      filtered = filtered.filter((r) => r.chamber === filters.chamber)
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase()
+      filtered = filtered.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.state_code.toLowerCase().includes(q) ||
+          r.district?.toLowerCase().includes(q)
+      )
+    }
+    return filtered
+  }
 }
 
 export async function getRepDetail(memberId: string): Promise<Representative | null> {
-  await delay(300)
-  return MOCK_REPS.find((r) => r.member_id === memberId) ?? null
+  try {
+    return await fetchAndMapMemberDetail(memberId)
+  } catch (err) {
+    console.warn('Congress.gov API failed for getRepDetail, falling back to mock data:', err)
+    return MOCK_REPS.find((r) => r.member_id === memberId) ?? null
+  }
 }
 
 export async function getRepVotes(
   memberId: string,
   page: number = 1
 ): Promise<{ votes: RepVote[]; total: number; page: number; pageSize: number }> {
-  await delay(400)
-
+  // Congress.gov doesn't expose per-member vote data easily; keep mock fallback
   const allVotes = MOCK_VOTES.filter((v) => v.member_id === memberId)
     .sort((a, b) => new Date(b.vote_date).getTime() - new Date(a.vote_date).getTime())
   const pageSize = 10
@@ -476,13 +777,20 @@ export async function getRepVotes(
 }
 
 export async function getRepPromises(memberId: string): Promise<CampaignPromise[]> {
-  await delay(300)
+  // No public API for campaign promises; use mock data
   return MOCK_PROMISES.filter((p) => p.member_id === memberId)
 }
 
 export async function getRepScore(memberId: string): Promise<RepScores> {
-  await delay(400)
-  return computeScores(memberId)
+  // Try to get the rep from live API for party loyalty / attendance, but promises are always mock
+  let reps: Representative[]
+  try {
+    const detail = await getRepDetail(memberId)
+    reps = detail ? [detail] : MOCK_REPS
+  } catch {
+    reps = MOCK_REPS
+  }
+  return computeScores(memberId, reps, MOCK_PROMISES)
 }
 
 export async function contactRep(
@@ -490,9 +798,14 @@ export async function contactRep(
   billId?: string,
   concernText?: string
 ): Promise<ContactEmailResult> {
-  await delay(600)
+  // Try live detail first for rep info, fall back to mock
+  let rep: Representative | null | undefined
+  try {
+    rep = await getRepDetail(memberId)
+  } catch {
+    rep = MOCK_REPS.find((r) => r.member_id === memberId)
+  }
 
-  const rep = MOCK_REPS.find((r) => r.member_id === memberId)
   if (!rep) {
     return { subject: '', body: '', mailto_link: '' }
   }
@@ -521,6 +834,39 @@ Sincerely,
 }
 
 export async function getRepBills(memberId: string): Promise<SponsoredBill[]> {
-  await delay(300)
-  return MOCK_SPONSORED_BILLS[memberId] ?? []
+  try {
+    // Fetch both sponsored and cosponsored legislation in parallel
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const [sponsoredData, cosponsoredData] = await Promise.all([
+      congressFetch<{ sponsoredLegislation?: any[] }>(
+        `/member/${memberId}/sponsored-legislation?limit=20&offset=0`
+      ),
+      congressFetch<{ cosponsoredLegislation?: any[] }>(
+        `/member/${memberId}/cosponsored-legislation?limit=20&offset=0`
+      ),
+    ])
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const sponsored: SponsoredBill[] = (sponsoredData.sponsoredLegislation ?? []).map((bill: any) => ({
+      bill_id: bill.number ? `${(bill.type ?? '').toLowerCase()}${bill.number}-${bill.congress ?? CURRENT_CONGRESS}` : bill.url ?? '',
+      title: bill.title ?? bill.latestAction?.text ?? 'Untitled',
+      status: bill.latestAction?.text ?? 'unknown',
+      introduced_date: bill.introducedDate ?? '',
+      role: 'sponsor' as const,
+    }))
+
+    const cosponsored: SponsoredBill[] = (cosponsoredData.cosponsoredLegislation ?? []).map((bill: any) => ({
+      bill_id: bill.number ? `${(bill.type ?? '').toLowerCase()}${bill.number}-${bill.congress ?? CURRENT_CONGRESS}` : bill.url ?? '',
+      title: bill.title ?? bill.latestAction?.text ?? 'Untitled',
+      status: bill.latestAction?.text ?? 'unknown',
+      introduced_date: bill.introducedDate ?? '',
+      role: 'cosponsor' as const,
+    }))
+
+    const combined = [...sponsored, ...cosponsored]
+    return combined.length > 0 ? combined : (MOCK_SPONSORED_BILLS[memberId] ?? [])
+  } catch (err) {
+    console.warn('Congress.gov API failed for getRepBills, falling back to mock data:', err)
+    return MOCK_SPONSORED_BILLS[memberId] ?? []
+  }
 }

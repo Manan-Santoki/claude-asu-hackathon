@@ -65,10 +65,10 @@ export default function ActionDetailPage() {
         variant="ghost"
         size="sm"
         className="mb-4 gap-1.5 -ml-2 text-muted-foreground hover:text-foreground"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/actions')}
       >
         <ArrowLeft className="h-4 w-4" />
-        Back
+        Back to Actions
       </Button>
 
       {isLoading || !selectedAction ? (

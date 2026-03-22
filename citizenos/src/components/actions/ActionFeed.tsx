@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useActionStore } from '@/stores/useActionStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import ActionCard from './ActionCard'
+import DataSourceBadge from '@/components/shared/DataSourceBadge'
 
 interface ActionFeedProps {
   limit?: number
@@ -57,6 +58,7 @@ export default function ActionFeed({ limit = 5, compact, stateFilter }: ActionFe
 
   return (
     <div className="space-y-3">
+      <DataSourceBadge sourceKey="actions" />
       {feed.slice(0, limit).map((action) => (
         <ActionCard key={action.id} action={action} compact={compact} />
       ))}

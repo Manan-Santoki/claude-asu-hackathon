@@ -89,7 +89,7 @@ export default function CandidateDetail() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 text-center">
         <p className="text-muted-foreground">Candidate not found.</p>
-        <Button variant="link" onClick={() => navigate(-1)}>Go back</Button>
+        <Button variant="link" onClick={() => navigate('/vote')}>Go back</Button>
       </div>
     )
   }
@@ -99,7 +99,7 @@ export default function CandidateDetail() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
       {/* Back button */}
-      <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+      <Button variant="ghost" size="sm" onClick={() => navigate('/vote')}>
         <ArrowLeft className="h-4 w-4 mr-1" />
         Back
       </Button>
