@@ -63,7 +63,12 @@ function NotificationItem({
         <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
           {notification.message}
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground/70">
+        {notification.reason && (
+          <p className="mt-1 text-[11px] text-primary/80 font-medium">
+            {notification.reason}
+          </p>
+        )}
+        <p className="mt-0.5 text-[11px] text-muted-foreground/70">
           {timeAgo(notification.created_at)}
         </p>
       </div>
@@ -99,16 +104,20 @@ export default function NotificationDropdown() {
   const markAllRead = useNotifStore((s) => s.markAllRead)
   const unreadCount = useNotifStore((s) => s.unreadCount)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const hasCompletedOnboarding = useAuthStore((s) => s.hasCompletedOnboarding)
+  const user = useAuthStore((s) => s.user)
 
-  const showOnboarding = isAuthenticated && !hasCompletedOnboarding()
+  const showOnboarding = isAuthenticated && !user?.onboarding_completed
   const recent = notifications.slice(0, 5)
 
   const handleClickNotification = (notif: Notification) => {
     if (!notif.read) {
       markRead(notif.id)
     }
-    navigate(`/bill/${notif.bill_id}`)
+    if (notif.action_id) {
+      navigate(`/action/${notif.action_id}`)
+    } else if (notif.bill_id) {
+      navigate(`/bill/${notif.bill_id}`)
+    }
   }
 
   return (

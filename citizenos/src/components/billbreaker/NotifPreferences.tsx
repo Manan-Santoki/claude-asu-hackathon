@@ -5,8 +5,9 @@ import { useNotifStore } from '@/stores/useNotifStore'
 import { CATEGORIES } from '@/lib/categories'
 
 const NOTIFICATION_TYPES = [
-  { key: 'bill_alerts', label: 'Bill Alerts', description: 'New bills matching your interests' },
-  { key: 'status_changes', label: 'Status Changes', description: 'When tracked bills change status' },
+  { key: 'bill_alerts', label: 'Bill Alerts', description: 'New bills matching your profile and interests' },
+  { key: 'action_alerts', label: 'Government Actions', description: 'Executive orders, rules, and rulings that affect you' },
+  { key: 'status_changes', label: 'Status Changes', description: 'When tracked bills or actions change status' },
   { key: 'rep_votes', label: 'Representative Votes', description: 'When your reps vote on bills' },
 ]
 

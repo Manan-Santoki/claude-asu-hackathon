@@ -24,6 +24,9 @@ The home screen features a clickable SVG map of the United States. Click any sta
 ### Authentication & Personalization
 Full authentication flow powered by InsForge with email/password login, Google and GitHub OAuth, and email verification. A 4-step onboarding wizard collects your location, visa/citizenship status (F-1, H-1B, OPT, DACA, Green Card, etc.), employment, age, and life situation to personalize what you see. Onboarding is optional — users are reminded via a banner, notification, and menu item until completed. A dedicated profile page lets you view and edit all your details at any time.
 
+### Smart Notifications
+Once onboarded, CitizenOS scans all bills and government actions against your profile using a relevance scoring engine. Notifications are generated only for content that matches your visa status, employment, household situation, state, and interests — no spam. Each notification explains *why* it's relevant to you (e.g., "Relevant to you: h-1b, visa fee") and links directly to the bill or action detail page. The dashboard shows an "Affecting You" section with your most important personalized alerts.
+
 ## Tech Stack
 
 | Category | Technology |

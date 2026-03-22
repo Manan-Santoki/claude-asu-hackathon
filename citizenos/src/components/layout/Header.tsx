@@ -88,7 +88,7 @@ function ThemeToggle() {
 }
 
 function UserMenu() {
-  const { user, isAuthenticated, logout, hasCompletedOnboarding } = useAuthStore()
+  const { user, isAuthenticated, logout } = useAuthStore()
   const navigate = useNavigate()
 
   if (!isAuthenticated) {
@@ -131,7 +131,7 @@ function UserMenu() {
           <LayoutDashboard className="mr-2 h-4 w-4" />
           Dashboard
         </DropdownMenuItem>
-        {!hasCompletedOnboarding() && (
+        {!user?.onboarding_completed && (
           <DropdownMenuItem onClick={() => navigate('/onboarding')}>
             <UserCog className="mr-2 h-4 w-4" />
             Complete Profile
