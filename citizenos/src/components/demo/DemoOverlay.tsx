@@ -3,12 +3,29 @@ import DemoEmailCapture from './DemoEmailCapture'
 import DemoPersonaPicker from './DemoPersonaPicker'
 import DemoNarratorBar from './DemoNarratorBar'
 import DemoSpotlight from './DemoSpotlight'
-import DemoProgressRail from './DemoProgressRail'
+// DemoProgressRail removed — step dots are now integrated into DemoNarratorBar
 import DemoCTA from './DemoCTA'
 import DemoEngine from './DemoEngine'
 import DemoTransition from './DemoTransition'
 import DemoCursor from './DemoCursor'
 import DemoNotification from './DemoNotification'
+
+/**
+ * DemoClickBlocker — transparent overlay that prevents user clicks on
+ * site content while demo is playing. The demo engine's own programmatic
+ * clicks bypass this because they dispatch events directly on elements.
+ * Demo controls (narrator bar, progress rail) sit above this z-index.
+ */
+function DemoClickBlocker() {
+  return (
+    <div
+      className="fixed inset-0 z-[10000] cursor-default"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      aria-hidden="true"
+    />
+  )
+}
 
 /**
  * DemoOverlay — root demo component rendered at the app level.
@@ -41,8 +58,10 @@ export default function DemoOverlay() {
       {/* Always-on layers during playback */}
       {phase === 'playing' && (
         <>
+          {/* Click blocker — prevents user from interacting with the site during demo.
+              Sits below demo controls but above all page content. */}
+          <DemoClickBlocker />
           <DemoSpotlight />
-          <DemoProgressRail />
           <DemoNarratorBar />
           <DemoCursor />
           <DemoNotification />

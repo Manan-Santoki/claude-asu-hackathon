@@ -14,12 +14,12 @@ export default function DemoTransition() {
   useEffect(() => {
     if (isTransitioning) {
       setPhase('enter')
-      const holdTimer = setTimeout(() => setPhase('hold'), 250)
-      const exitTimer = setTimeout(() => setPhase('exit'), 600)
+      const holdTimer = setTimeout(() => setPhase('hold'), 400)
+      const exitTimer = setTimeout(() => setPhase('exit'), 2000)
       const doneTimer = setTimeout(() => {
         setPhase('idle')
         useDemoStore.getState().endTransition()
-      }, 900)
+      }, 2500)
       return () => {
         clearTimeout(holdTimer)
         clearTimeout(exitTimer)
