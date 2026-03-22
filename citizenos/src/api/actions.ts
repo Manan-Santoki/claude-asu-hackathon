@@ -1,8 +1,8 @@
-// Government Actions API client — reads from InsForge database (zero external API calls)
+// Government Actions API client — live Federal Register API with fallback mock data
+// Uses https://www.federalregister.gov/api/v1 (no API key required)
 
-import { insforge } from '@/lib/insforge'
 import { useDataSourceStore } from '@/stores/useDataSourceStore'
-const setActionSource = (s: 'live' | 'demo' | 'loading' | 'cached') => useDataSourceStore.getState().setSource('actions', s)
+const setActionSource = (s: 'live' | 'demo' | 'loading') => useDataSourceStore.getState().setSource('actions', s)
 
 export type ActionType =
   | 'bill'
@@ -66,18 +66,272 @@ export interface ChatMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Rich curated actions data (stored in-memory for detail views)
-// The DB table has basic fields; this has the full rich data.
+// Federal Register API helper
 // ---------------------------------------------------------------------------
 
-const CURATED_ACTIONS: GovernmentAction[] = [
+const FED_REG_BASE = 'https://www.federalregister.gov/api/v1'
+
+async function fedRegFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
+  const url = new URL(`${FED_REG_BASE}${path}`)
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.append(key, value)
+    }
+  }
+  const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error(`Federal Register API error: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// ---------------------------------------------------------------------------
+// Mapping Federal Register documents to GovernmentAction
+// ---------------------------------------------------------------------------
+
+interface FedRegAgency {
+  name: string
+  id?: number
+  slug?: string
+}
+
+interface FedRegDocument {
+  title: string
+  abstract: string | null
+  document_number: string
+  type: string        // PRESDOCU, RULE, PRORULE, NOTICE
+  subtype: string | null
+  executive_order_number: number | null
+  signing_date: string | null
+  publication_date: string
+  effective_on: string | null
+  agencies: FedRegAgency[]
+  full_text_xml_url: string | null
+  pdf_url: string | null
+  html_url: string | null
+  body_html_url: string | null
+  json_url?: string | null
+}
+
+interface FedRegSearchResponse {
+  count: number
+  results: FedRegDocument[]
+  total_pages?: number
+}
+
+function mapFedRegType(doc: FedRegDocument): ActionType {
+  switch (doc.type) {
+    case 'PRESDOCU': {
+      const sub = (doc.subtype ?? '').toLowerCase()
+      if (sub.includes('executive order')) return 'executive_order'
+      if (sub.includes('proclamation')) return 'proclamation'
+      if (sub.includes('memorand')) return 'memorandum'
+      // Guess from title if subtype missing
+      const titleLower = doc.title.toLowerCase()
+      if (titleLower.includes('executive order')) return 'executive_order'
+      if (titleLower.includes('proclamation')) return 'proclamation'
+      if (titleLower.includes('memorand')) return 'memorandum'
+      return 'executive_order' // default for presidential documents
+    }
+    case 'RULE':
+      return 'final_rule'
+    case 'PRORULE':
+      return 'proposed_rule'
+    case 'NOTICE':
+      return 'agency_action'
+    default:
+      return 'agency_action'
+  }
+}
+
+/** Derive rough categories from the title and abstract text */
+function deriveCategories(title: string, abstract: string | null): string[] {
+  const text = `${title} ${abstract ?? ''}`.toLowerCase()
+  const cats: string[] = []
+
+  const mapping: Record<string, string[]> = {
+    immigration: ['immigra', 'visa', 'h-1b', 'h1b', 'asylum', 'deporta', 'border', 'alien', 'citizen', 'naturaliz', 'refugee', 'nonimmigrant', 'travel ban'],
+    economy: ['econom', 'tariff', 'trade', 'tax', 'fiscal', 'inflation', 'gdp', 'financ', 'market', 'monetary'],
+    healthcare: ['health', 'medic', 'drug', 'pharma', 'hospital', 'insurance', 'medicare', 'medicaid', 'disease', 'pandemic', 'vaccine'],
+    education: ['educat', 'school', 'student', 'university', 'college', 'pell grant', 'loan', 'fafsa', 'academic'],
+    environment: ['environment', 'climate', 'emission', 'pollution', 'energy', 'fossil', 'renewable', 'carbon', 'epa', 'clean air', 'clean water'],
+    labor: ['labor', 'worker', 'wage', 'employ', 'union', 'workforce', 'osha', 'overtime', 'contractor'],
+    technology: ['technolog', 'cyber', 'artificial intelligence', 'data privacy', 'internet', 'telecom', 'digital', 'software', 'crypto'],
+    defense: ['defense', 'military', 'armed forces', 'pentagon', 'national security', 'weapons', 'army', 'navy', 'air force'],
+    veterans: ['veteran', 'va ', 'warrior'],
+    trade: ['trade', 'tariff', 'import', 'export', 'customs', 'wto'],
+    government_spending: ['budget', 'spending', 'appropriat', 'debt', 'deficit', 'government efficienc'],
+    foreign_policy: ['foreign', 'diplomat', 'sanction', 'ambassador', 'treaty', 'nato', 'international'],
+    social_issues: ['civil rights', 'discriminat', 'equality', 'lgbtq', 'abortion', 'religion', 'free speech', 'social media', 'vetting'],
+  }
+
+  for (const [category, keywords] of Object.entries(mapping)) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      cats.push(category)
+    }
+  }
+
+  return cats.length > 0 ? cats : ['government']
+}
+
+/** Derive affected personas from title/abstract */
+function deriveAffectedPersonas(title: string, abstract: string | null): string[] {
+  const text = `${title} ${abstract ?? ''}`.toLowerCase()
+  const personas: string[] = []
+
+  const mapping: Record<string, string[]> = {
+    visa_holder: ['visa', 'immigra', 'h-1b', 'h1b', 'nonimmigrant', 'alien', 'foreign national', 'travel ban', 'asylum'],
+    student: ['student', 'university', 'college', 'education', 'fafsa', 'pell grant', 'school', 'academic', 'f-1', 'f1'],
+    small_business: ['small business', 'sba', 'entrepreneur', 'contractor', 'employer', 'tariff', 'trade'],
+    senior: ['senior', 'social security', 'medicare', 'retirement', 'elderly', 'aging'],
+    veteran: ['veteran', 'military', 'armed forces', 'warrior', 'va '],
+    parent: ['parent', 'child', 'family', 'famili'],
+    healthcare_worker: ['healthcare worker', 'nurse', 'doctor', 'physician', 'hospital', 'nih', 'medical research'],
+    gig_worker: ['gig', 'independent contractor', 'freelanc', 'uber', 'doordash', 'rideshare'],
+  }
+
+  for (const [persona, keywords] of Object.entries(mapping)) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      personas.push(persona)
+    }
+  }
+
+  return personas.length > 0 ? personas : ['general_public']
+}
+
+/** Determine impact level heuristically from document type and keywords */
+function deriveImpactLevel(doc: FedRegDocument): 'high' | 'medium' | 'low' {
+  // Presidential documents and final rules tend to be higher impact
+  if (doc.type === 'PRESDOCU') return 'high'
+  if (doc.type === 'RULE') return 'medium'
+  if (doc.type === 'PRORULE') return 'medium'
+
+  const text = `${doc.title} ${doc.abstract ?? ''}`.toLowerCase()
+  if (text.includes('emergency') || text.includes('immediately') || text.includes('critical')) return 'high'
+  return 'low'
+}
+
+/** Build a basic timeline from dates available */
+function deriveTimeline(doc: FedRegDocument): TimelineEvent[] {
+  const today = new Date()
+  const events: TimelineEvent[] = []
+
+  if (doc.signing_date) {
+    events.push({
+      date: doc.signing_date,
+      label: 'Signed',
+      completed: new Date(doc.signing_date) <= today,
+    })
+  }
+
+  events.push({
+    date: doc.publication_date,
+    label: 'Published in Federal Register',
+    completed: new Date(doc.publication_date) <= today,
+  })
+
+  if (doc.effective_on) {
+    events.push({
+      date: doc.effective_on,
+      label: 'Effective date',
+      completed: new Date(doc.effective_on) <= today,
+    })
+  }
+
+  return events
+}
+
+/** Generate a short human-readable impact story from title + abstract */
+function deriveImpactStory(doc: FedRegDocument): string {
+  const abstract = doc.abstract?.trim()
+  if (abstract && abstract.length > 40) {
+    return abstract
+  }
+  return `This ${doc.type === 'PRESDOCU' ? 'presidential document' : doc.type === 'RULE' ? 'final rule' : doc.type === 'PRORULE' ? 'proposed rule' : 'document'} — "${doc.title}" — was published on ${doc.publication_date}. Review the full text for detailed impact analysis.`
+}
+
+/** Compute issuing authority from agencies + type */
+function deriveIssuingAuthority(doc: FedRegDocument): string {
+  if (doc.type === 'PRESDOCU') return 'President'
+  if (doc.agencies.length > 0) return doc.agencies[0].name
+  return 'Federal Government'
+}
+
+function mapFedRegDocument(doc: FedRegDocument): GovernmentAction {
+  const actionType = mapFedRegType(doc)
+  const categories = deriveCategories(doc.title, doc.abstract)
+  const affectedPersonas = deriveAffectedPersonas(doc.title, doc.abstract)
+  const summaryText = doc.abstract?.trim() || doc.title
+  const today = new Date()
+
+  const effectiveDate = doc.effective_on ?? null
+  let status = 'active'
+  let statusDetail = 'Published in the Federal Register.'
+  if (effectiveDate) {
+    if (new Date(effectiveDate) > today) {
+      status = 'pending'
+      statusDetail = `Takes effect on ${effectiveDate}.`
+    } else {
+      status = 'active'
+      statusDetail = `In effect since ${effectiveDate}.`
+    }
+  }
+  if (doc.type === 'PRORULE') {
+    status = 'proposed'
+    statusDetail = 'Proposed rule — public comments may be open.'
+  }
+
+  // Build impact_personas from the affected personas list
+  const impactPersonas: Record<string, string> = {}
+  for (const p of affectedPersonas) {
+    impactPersonas[p] = `This ${actionType.replace(/_/g, ' ')} may affect you. Review the full text for details: ${doc.html_url ?? doc.pdf_url ?? ''}`
+  }
+
+  return {
+    id: doc.document_number,
+    action_id: doc.document_number,
+    action_type: actionType,
+    title: doc.title,
+    summary_raw: summaryText,
+    summary_ai: summaryText,
+    full_text_url: doc.html_url ?? doc.full_text_xml_url ?? '',
+    pdf_url: doc.pdf_url ?? '',
+    issuing_authority: deriveIssuingAuthority(doc),
+    agencies: doc.agencies.map((a) => a.name),
+    document_number: doc.document_number,
+    executive_order_number: doc.executive_order_number ?? null,
+    signing_date: doc.signing_date ?? null,
+    effective_date: effectiveDate,
+    publication_date: doc.publication_date,
+    status,
+    status_detail: statusDetail,
+    categories,
+    affected_personas: affectedPersonas,
+    impact_level: deriveImpactLevel(doc),
+    state_relevance: [],
+    impact_personas: impactPersonas,
+    impact_story: deriveImpactStory(doc),
+    ai_processed: false,
+    related_action_ids: [],
+    legal_challenges: [],
+    timeline: deriveTimeline(doc),
+    source_url: doc.html_url ?? '',
+    source_api: 'federal_register',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback data (former MOCK_ACTIONS)
+// ---------------------------------------------------------------------------
+
+const FALLBACK_ACTIONS: GovernmentAction[] = [
   {
     id: 'act-1',
     action_id: 'proc-10923',
     action_type: 'proclamation',
     title: 'Adjusting Nonimmigrant Worker Admission Programs — H-1B $100,000 Supplemental Fee',
     summary_raw: 'Presidential Proclamation establishing a supplemental fee of $100,000 for certain H-1B specialty occupation worker petitions.',
-    summary_ai: 'This proclamation requires employers to pay a $100,000 supplemental fee for each H-1B visa petition when the worker is outside the US or requires consular processing. The fee took effect September 21, 2025. Key exemption: F-1 students already in the US who change status to H-1B are NOT required to pay this fee.',
+    summary_ai: 'This proclamation requires employers to pay a $100,000 supplemental fee for each H-1B visa petition when the worker is outside the US or requires consular processing. The fee took effect September 21, 2025. Key exemption: F-1 students already in the US who change status to H-1B are NOT required to pay this fee. The fee is in addition to existing filing costs of $2,000-$10,000. Courts have upheld the fee as of December 2025, but appeals are pending.',
     full_text_url: 'https://www.federalregister.gov/documents/2025/09/20/2025-proc-10923',
     pdf_url: '',
     issuing_authority: 'President',
@@ -94,20 +348,21 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     impact_level: 'high',
     state_relevance: ['CA', 'TX', 'NY', 'WA', 'NJ', 'IL', 'MA', 'AZ'],
     impact_personas: {
-      visa_holder: 'If you are applying for an H-1B from outside the US, your employer must now pay a $100,000 supplemental fee per petition. If you are currently in the US on an F-1 student visa and changing status to H-1B, you are EXEMPT from this fee.',
-      small_business: 'Small businesses sponsoring H-1B workers from abroad now face $100,000+ per petition. This may make it cost-prohibitive for smaller firms to hire foreign talent.',
-      student: 'International students on F-1 visas who apply for H-1B through change of status (from within the US) are EXEMPT from the $100K fee.',
+      visa_holder: 'If you are applying for an H-1B from outside the US, your employer must now pay a $100,000 supplemental fee per petition. This is on top of existing filing fees. If you are currently in the US on an F-1 student visa and changing status to H-1B, you are EXEMPT from this fee.',
+      small_business: 'Small businesses sponsoring H-1B workers from abroad now face $100,000+ per petition. This may make it cost-prohibitive for smaller firms to hire foreign talent. Companies with under 25 employees are NOT exempt — the fee applies equally regardless of company size.',
+      student: 'International students on F-1 visas who apply for H-1B through change of status (from within the US) are EXEMPT from the $100K fee. However, if you leave the US and need consular processing, the fee applies. This creates a strong incentive to stay in the US during the transition.',
     },
-    impact_story: 'Priya is a software engineer in Hyderabad who received an H-1B offer from a startup in Austin. Under the new proclamation, her employer must pay $100,000 just for the visa petition. Meanwhile, Raj, an F-1 student at ASU, can convert to H-1B without the supplemental fee because he\'s already in the US.',
+    impact_story: 'Priya is a software engineer in Hyderabad who received an H-1B offer from a startup in Austin. Under the new proclamation, her employer must pay $100,000 just for the visa petition — on top of $4,000 in existing fees. The 15-person startup had budgeted $15,000 for immigration costs. Meanwhile, Raj, an F-1 student at ASU, can convert to H-1B without the supplemental fee because he\'s already in the US. The two-tier system has fundamentally changed who can access H-1B sponsorship.',
     ai_processed: true,
     related_action_ids: ['act-2', 'act-3'],
     legal_challenges: [
-      { case_name: 'ITServe Alliance v. DHS', court: 'U.S. District Court, D.C.', status: 'upheld', ruling_date: '2025-12-19', summary: 'Court upheld the $100K fee as within presidential authority.' },
-      { case_name: 'NASSCOM v. USCIS', court: 'U.S. District Court, S.D.N.Y.', status: 'pending', summary: 'Challenge arguing the fee is arbitrary. Hearing scheduled March 2026.' },
+      { case_name: 'ITServe Alliance v. DHS', court: 'U.S. District Court, D.C.', status: 'upheld', ruling_date: '2025-12-19', summary: 'Judge Howell granted government\'s motion for summary judgment, upholding the $100K fee as within presidential authority.' },
+      { case_name: 'NASSCOM v. USCIS', court: 'U.S. District Court, S.D.N.Y.', status: 'pending', summary: 'Challenge filed by Indian IT industry association arguing the fee is arbitrary and violates the Administrative Procedure Act. Hearing scheduled March 2026.' },
     ],
     timeline: [
       { date: '2025-09-19', label: 'Signed by President', completed: true },
       { date: '2025-09-21', label: 'Effective — fee collection begins', completed: true },
+      { date: '2025-10-15', label: 'First legal challenge filed', completed: true },
       { date: '2025-12-19', label: 'Fee upheld by D.C. court', completed: true },
       { date: '2026-03-15', label: 'S.D.N.Y. hearing scheduled', completed: false },
     ],
@@ -120,7 +375,7 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_type: 'final_rule',
     title: 'H-1B Registration Modernization: Wage-Level Based Lottery Selection',
     summary_raw: 'Final rule modifying the H-1B cap selection process to prioritize beneficiaries offered higher wages.',
-    summary_ai: 'This agency rule changes how H-1B lottery winners are selected. Workers offered higher wages get more lottery entries. Level 4 wage earners get 4 entries (61% selection odds). Level 1 wage earners get 1 entry, dramatically reducing their chances.',
+    summary_ai: 'This agency rule changes how H-1B lottery winners are selected. Instead of random selection, workers offered higher wages get more lottery entries. Level 4 wage earners (highest) get 4 entries (61% selection odds, up from 29%). Level 1 wage earners (entry-level) get 1 entry, dramatically reducing their chances. This means experienced, higher-paid workers are far more likely to get H-1B visas than entry-level hires, fundamentally shifting who employers can realistically sponsor.',
     full_text_url: 'https://www.federalregister.gov/documents/2025/',
     pdf_url: '',
     issuing_authority: 'USCIS',
@@ -137,15 +392,17 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     impact_level: 'high',
     state_relevance: ['CA', 'TX', 'NY', 'WA', 'NJ', 'IL'],
     impact_personas: {
-      visa_holder: 'If you are an entry-level H-1B applicant, your lottery odds drop significantly. Higher-paid applicants get 4x the lottery entries.',
-      small_business: 'Small businesses that typically hire entry-level H-1B workers face much lower lottery success rates.',
-      student: 'New graduates entering the H-1B lottery at entry-level wages face dramatically lower selection odds.',
+      visa_holder: 'If you are an entry-level H-1B applicant (Level 1 wage), your lottery odds drop significantly. Higher-paid applicants at Level 4 get 4x the lottery entries, giving them a 61% chance vs. your ~15%. Consider negotiating a higher salary to improve your odds.',
+      small_business: 'Small businesses that typically hire entry-level H-1B workers face much lower lottery success rates. You may need to offer higher wages (Level 3-4) to improve odds, increasing labor costs by 30-50% for sponsored roles.',
+      student: 'New graduates entering the H-1B lottery at entry-level wages face dramatically lower selection odds. The wage-based system favors experienced hires. OPT/STEM OPT extension becomes even more critical as a bridge.',
     },
-    impact_story: 'Tech company XYZ in Phoenix offered $85,000 to a new graduate — a Level 1 wage. Under the new rule, their chance drops to about 15%. A competing offer at $165,000 has a 61% chance.',
+    impact_story: 'Tech company XYZ in Phoenix offered $85,000 to a new graduate — a Level 1 wage. Under the old random lottery, they had a 29% chance. Under the new rule, that drops to about 15%. Meanwhile, a competing offer at $165,000 (Level 4) has a 61% chance. The new system effectively prices out startups and smaller companies from the H-1B market.',
     ai_processed: true,
     related_action_ids: ['act-1'],
     legal_challenges: [],
     timeline: [
+      { date: '2025-08-01', label: 'Proposed rule published', completed: true },
+      { date: '2025-09-30', label: 'Public comment period closed', completed: true },
       { date: '2025-11-15', label: 'Final rule published', completed: true },
       { date: '2026-01-01', label: 'Effective date', completed: true },
       { date: '2026-03-01', label: 'First lottery under new rules', completed: false },
@@ -159,7 +416,7 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_type: 'memorandum',
     title: 'Expansion of Social Media Vetting for Immigration Benefit Requests',
     summary_raw: 'Presidential memorandum directing USCIS to expand social media screening to all immigration benefit applications.',
-    summary_ai: 'USCIS now reviews social media profiles for all visa applicants and immigration benefit requests. The vetting looks for "anti-American" and "antisemitic" activity. All visa applicants are instructed to set social media profiles to public.',
+    summary_ai: 'USCIS now reviews social media profiles for all visa applicants and immigration benefit requests — not just the select categories previously screened. The vetting specifically looks for "anti-American" and "antisemitic" activity, which officials say will be "an overwhelmingly negative factor" in discretionary decisions. All H-1B, H-4, F, M, and J visa applicants are instructed to set social media profiles to public. This affects millions of visa holders and applicants annually.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'President',
@@ -176,18 +433,19 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     impact_level: 'high',
     state_relevance: [],
     impact_personas: {
-      visa_holder: 'Your social media profiles are now reviewed as part of any USCIS benefit request. Posts deemed "anti-American" will be a strongly negative factor.',
-      student: 'International students on F-1 and M-1 visas are subject to expanded social media vetting during OPT applications.',
+      visa_holder: 'Your social media profiles are now reviewed as part of any USCIS benefit request. You are instructed to set profiles to public. Posts deemed "anti-American" or "antisemitic" will be a strongly negative factor in any discretionary decision. This applies to H-1B, H-4, and all other visa categories.',
+      student: 'International students on F-1 and M-1 visas are subject to expanded social media vetting. The State Department reviews social media during visa interviews, and USCIS reviews during benefit applications like OPT. Set profiles to public before applying.',
     },
-    impact_story: 'Ahmed, a PhD student at MIT, had his OPT application delayed by 3 months while USCIS reviewed his social media.',
+    impact_story: 'Ahmed, a PhD student at MIT, had his OPT application delayed by 3 months while USCIS reviewed his social media. A post criticizing US foreign policy was flagged for manual review. His advisor says the uncertainty is driving international students to consider Canada and the UK instead.',
     ai_processed: true,
     related_action_ids: ['act-1'],
     legal_challenges: [
-      { case_name: 'ACLU v. DHS', court: 'U.S. District Court, N.D. Cal.', status: 'pending', summary: 'First Amendment challenge arguing vetting violates free speech rights.' },
+      { case_name: 'ACLU v. DHS', court: 'U.S. District Court, N.D. Cal.', status: 'pending', summary: 'First Amendment challenge arguing that vetting social media for political views violates free speech rights. Preliminary hearing held Feb 2026.' },
     ],
     timeline: [
       { date: '2025-08-01', label: 'Memorandum signed', completed: true },
       { date: '2025-08-19', label: 'USCIS begins expanded vetting', completed: true },
+      { date: '2025-12-15', label: 'State Dept extends to all H-1B applicants', completed: true },
       { date: '2026-02-10', label: 'ACLU files legal challenge', completed: true },
     ],
     source_url: 'https://www.whitehouse.gov/presidential-actions/',
@@ -199,7 +457,7 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_type: 'executive_order',
     title: 'Establishing the Department of Government Efficiency (DOGE)',
     summary_raw: 'Executive order establishing DOGE to modernize federal IT, cut regulations, and reduce government spending.',
-    summary_ai: 'This executive order created the Department of Government Efficiency (DOGE), tasked with cutting federal spending, modernizing IT, and eliminating regulations. By early 2026, DOGE actions have affected USAID, HHS, SSA, Education, and GSA.',
+    summary_ai: 'This executive order created the Department of Government Efficiency (DOGE), tasked with cutting federal spending, modernizing IT, and eliminating regulations. DOGE personnel gained access to agency information systems and began terminating contracts, facilitating mass layoffs, and reorganizing agencies. By early 2026, DOGE actions have affected USAID, HHS, SSA, Education, and GSA — cutting services that millions of Americans depend on, from Social Security processing to student loan management to veterans\' benefits.',
     full_text_url: 'https://www.federalregister.gov/documents/2025/01/20/eo-14110',
     pdf_url: '',
     issuing_authority: 'President',
@@ -216,22 +474,23 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     impact_level: 'high',
     state_relevance: [],
     impact_personas: {
-      senior: 'SSA staffing cuts are creating delays in Social Security benefit processing.',
-      veteran: 'VA has seen contract cancellations affecting telehealth services and some mental health programs.',
-      student: 'The Department of Education is being reorganized. Student loan servicing may be affected.',
-      healthcare_worker: 'HHS contract cancellations have affected public health research grants.',
-      small_business: 'SBA processing times for loans have increased.',
+      senior: 'SSA staffing cuts are creating delays in Social Security benefit processing. Some field offices have reduced hours. If you\'re applying for benefits or need assistance, expect longer wait times. The SSA phone line wait times have increased from an average of 12 minutes to over 40 minutes.',
+      veteran: 'VA has seen contract cancellations affecting telehealth services and some mental health programs. While the Veterans Mental Health Act added funding, DOGE cuts are reducing the staff available to deliver those services. Check with your local VA facility for service availability.',
+      student: 'The Department of Education is being reorganized. Six programs are being transferred to other agencies. Student loan servicing may be affected. If you\'re in an income-driven repayment plan, monitor your servicer for any changes to processing.',
+      healthcare_worker: 'HHS contract cancellations have affected public health research grants and some CDC programs. Hospital reporting requirements may change as agencies are reorganized.',
+      small_business: 'SBA processing times for loans have increased. Some small business assistance programs have been defunded or transferred. Check SBA.gov for current program availability.',
     },
-    impact_story: 'Margaret, 72, in Scottsdale relies on Social Security for 80% of her income. She waited 2 hours and 15 minutes on the SSA phone line — up from 12 minutes a year ago.',
+    impact_story: 'Margaret, 72, in Scottsdale relies on Social Security for 80% of her income. When she needed to update her direct deposit information, she waited 2 hours and 15 minutes on the SSA phone line — up from 12 minutes a year ago. Her local SSA field office in Tempe now closes at 2 PM instead of 4 PM due to staffing cuts.',
     ai_processed: true,
     related_action_ids: ['act-5'],
     legal_challenges: [
-      { case_name: 'AFGE v. DOGE', court: 'U.S. District Court, D.C.', status: 'pending', summary: 'Federal employee unions challenging mass layoffs.' },
-      { case_name: 'State of California v. DOGE', court: 'U.S. District Court, N.D. Cal.', status: 'blocked', ruling_date: '2026-01-15', summary: 'Court temporarily blocked certain DOGE contract cancellations.' },
+      { case_name: 'AFGE v. DOGE', court: 'U.S. District Court, D.C.', status: 'pending', summary: 'Federal employee unions challenging mass layoffs as violating civil service protections.' },
+      { case_name: 'State of California v. DOGE', court: 'U.S. District Court, N.D. Cal.', status: 'blocked', ruling_date: '2026-01-15', summary: 'Court temporarily blocked certain DOGE contract cancellations affecting Medicaid processing.' },
     ],
     timeline: [
       { date: '2025-01-20', label: 'Executive order signed', completed: true },
       { date: '2025-02-15', label: 'DOGE begins agency access', completed: true },
+      { date: '2025-03-01', label: 'First round of contract cancellations', completed: true },
       { date: '2025-06-01', label: 'Mass layoffs across agencies', completed: true },
       { date: '2026-01-15', label: 'Court blocks some Medicaid cuts', completed: true },
     ],
@@ -244,7 +503,7 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_type: 'agency_action',
     title: 'Department of Education Reorganization — Programs Transferred to Other Agencies',
     summary_raw: 'Six interagency agreements transferring Department of Education programs to four other agencies.',
-    summary_ai: 'The Department of Education is being dismantled through six interagency transfer agreements. Student loan servicing operations move to Treasury. Special education oversight goes to HHS. This affects 45 million student loan borrowers.',
+    summary_ai: 'The Department of Education is being dismantled through six interagency transfer agreements. Student loan servicing operations are moving to Treasury. Special education oversight goes to HHS. Vocational education transfers to Labor. Pell Grant administration moves to Treasury. This affects 45 million student loan borrowers, 7.5 million students with disabilities, and every university receiving federal financial aid. Processing delays are expected during the transition.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'Department of Education',
@@ -255,24 +514,25 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     effective_date: '2025-07-01',
     publication_date: '2025-05-15',
     status: 'active',
-    status_detail: 'Transfers underway. Expect processing delays through mid-2026.',
+    status_detail: 'Transfers underway. Student loan servicing transition to Treasury ongoing. Expect processing delays through mid-2026.',
     categories: ['education', 'government_spending'],
     affected_personas: ['student', 'parent'],
     impact_level: 'high',
     state_relevance: [],
     impact_personas: {
-      student: 'Your student loan servicer may change. Income-driven repayment recertification timelines may be extended.',
-      parent: 'Parent PLUS loan servicing is part of the transfer. FAFSA processing may see delays.',
+      student: 'Your student loan servicer may change as operations transfer to Treasury. Income-driven repayment recertification timelines may be extended. FAFSA processing may see delays. Monitor StudentAid.gov for updates.',
+      parent: 'Parent PLUS loan servicing is part of the transfer. If you\'re applying for financial aid, the FAFSA processing timeline may extend from 3-5 days to 2-4 weeks during the transition period.',
     },
-    impact_story: 'The financial aid office at ASU is seeing a 300% increase in student inquiries about loan servicing.',
+    impact_story: 'The financial aid office at ASU is seeing a 300% increase in student inquiries about loan servicing. Director Sarah Chen says: "Students don\'t know who to call. Their servicer changed, their login doesn\'t work, and recertification deadlines are being missed because the new system isn\'t ready."',
     ai_processed: true,
     related_action_ids: ['act-4'],
     legal_challenges: [
-      { case_name: 'NEA v. Department of Education', court: 'U.S. District Court, D.C.', status: 'pending', summary: 'Challenge arguing transfers exceed executive authority.' },
+      { case_name: 'NEA v. Department of Education', court: 'U.S. District Court, D.C.', status: 'pending', summary: 'Teachers\' unions challenging transfers as exceeding executive authority without Congressional approval.' },
     ],
     timeline: [
       { date: '2025-05-15', label: 'Interagency agreements announced', completed: true },
       { date: '2025-07-01', label: 'Transfers begin', completed: true },
+      { date: '2025-10-01', label: 'Student loan servicing transition starts', completed: true },
       { date: '2026-06-01', label: 'Transition expected to complete', completed: false },
     ],
     source_url: 'https://www.ed.gov/',
@@ -283,8 +543,8 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_id: 'proc-travel-ban-2025',
     action_type: 'proclamation',
     title: 'Restricting and Limiting the Entry of Foreign Nationals — Expanded Travel Ban',
-    summary_raw: 'Presidential proclamation expanding the US travel ban to cover nationals from 19 countries.',
-    summary_ai: 'This proclamation expands the US travel ban to cover nationals from 19 countries. Full entry suspension applies to 12 countries. Partial suspension applies to 7 countries.',
+    summary_raw: 'Presidential proclamation modifying and expanding the US travel ban, updating the lists of countries subject to entry restrictions.',
+    summary_ai: 'This proclamation expands the US travel ban to cover nationals from 19 countries, effective January 1, 2026. Full entry suspension applies to Afghanistan, Burma, Chad, Republic of Congo, Equatorial Guinea, Eritrea, Haiti, Iran, Libya, Somalia, Sudan, and Yemen. Partial suspension (certain visa categories only) applies to Burundi, Cuba, Laos, Sierra Leone, Togo, Turkmenistan, and Venezuela. Existing valid visas are not immediately revoked, but renewals may be denied.',
     full_text_url: 'https://www.whitehouse.gov/presidential-actions/2025/12/',
     pdf_url: '',
     issuing_authority: 'President',
@@ -301,18 +561,19 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     impact_level: 'high',
     state_relevance: ['CA', 'NY', 'MI', 'MN', 'VA', 'TX'],
     impact_personas: {
-      visa_holder: 'If you are a national of one of the 19 listed countries, you may be unable to obtain new visas or renew existing ones.',
-      student: 'International students from affected countries may face visa renewal challenges.',
+      visa_holder: 'If you are a national of one of the 19 listed countries, you may be unable to obtain new visas or renew existing ones depending on your country and visa category. Existing valid visas are not immediately revoked. Check with an immigration attorney for your specific situation.',
+      student: 'International students from affected countries may face visa renewal challenges. If you are currently in the US on a valid F-1, your status is not immediately affected, but leaving and re-entering may be restricted. Universities are providing guidance.',
     },
-    impact_story: 'Fatima, a PhD candidate at the University of Michigan from Yemen, cannot visit her family because under the expanded ban, she cannot re-enter the US if she leaves.',
+    impact_story: 'Fatima, a PhD candidate at the University of Michigan from Yemen, planned to visit her family during winter break. Under the expanded ban, she cannot re-enter the US if she leaves. She hasn\'t seen her family in 3 years. Her university\'s international student office is advising all students from affected countries to remain in the US.',
     ai_processed: true,
     related_action_ids: [],
     legal_challenges: [
-      { case_name: 'IRAP v. Trump', court: 'U.S. Court of Appeals, 4th Circuit', status: 'pending', summary: 'Challenge arguing the expanded ban exceeds presidential authority.' },
+      { case_name: 'IRAP v. Trump', court: 'U.S. Court of Appeals, 4th Circuit', status: 'pending', summary: 'Challenge arguing the expanded ban exceeds presidential authority and discriminates based on nationality.' },
     ],
     timeline: [
       { date: '2025-12-16', label: 'Proclamation signed', completed: true },
       { date: '2026-01-01', label: 'Ban takes effect', completed: true },
+      { date: '2026-01-20', label: 'Legal challenges filed', completed: true },
       { date: '2026-04-01', label: '4th Circuit hearing scheduled', completed: false },
     ],
     source_url: 'https://www.whitehouse.gov/presidential-actions/2025/12/',
@@ -323,8 +584,8 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_id: 'eo-tariffs-liberation',
     action_type: 'executive_order',
     title: 'Reciprocal Tariffs on Imported Goods — "Liberation Day" Trade Action',
-    summary_raw: 'Executive order imposing reciprocal tariffs on over 60 countries.',
-    summary_ai: 'This executive order imposed reciprocal tariffs on imports from over 60 countries, with rates 10% to 50%. China faces 145% tariffs. Consumer prices rising 2-4% on average, costing households $1,500-$3,800/year.',
+    summary_raw: 'Executive order imposing reciprocal tariffs on over 60 countries to boost US manufacturing.',
+    summary_ai: 'This executive order imposed "reciprocal tariffs" on imports from over 60 countries, with rates ranging from 10% to 50% depending on the country. China faces an effective tariff rate of 145% on most goods. The tariffs apply to consumer electronics, clothing, auto parts, food imports, building materials, and industrial supplies. The administration projects $600 billion in annual tariff revenue but economists estimate consumer prices will rise 2-4% on average, costing the typical American household $1,500-$3,800 per year in higher prices.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'President',
@@ -335,27 +596,29 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     effective_date: '2025-04-09',
     publication_date: '2025-04-05',
     status: 'active',
-    status_detail: 'In effect. China tariffs escalated to 145%.',
+    status_detail: 'In effect. Some country-specific rates adjusted through bilateral negotiations. China tariffs escalated.',
     categories: ['economy', 'trade', 'government_spending'],
     affected_personas: ['small_business', 'parent', 'senior', 'gig_worker'],
     impact_level: 'high',
     state_relevance: [],
     impact_personas: {
-      small_business: 'Businesses importing goods face 10-50% higher input costs. Average small business cost increase estimated at $12,000-$45,000/year.',
-      parent: 'Consumer prices are rising across categories. The typical family of four may see $2,000-$3,800 in additional annual costs.',
-      senior: 'Fixed-income seniors are disproportionately affected by price increases.',
-      gig_worker: 'Independent contractors face higher costs for supplies and equipment.',
+      small_business: 'Businesses importing goods face 10-50% higher input costs. Retailers, restaurants, and manufacturers are most affected. Small businesses lack the buying power to absorb tariffs and are passing costs to consumers. Average small business cost increase estimated at $12,000-$45,000/year.',
+      parent: 'Consumer prices are rising across categories. Clothing, toys, electronics, and food are all affected. The typical family of four may see $2,000-$3,800 in additional annual costs. Children\'s products from China face the highest tariff rates.',
+      senior: 'Fixed-income seniors are disproportionately affected by price increases. Prescription drugs manufactured abroad may see price increases. Household goods and food prices have risen 3-5% since tariffs took effect.',
+      gig_worker: 'Independent contractors who purchase supplies and equipment face higher costs. Delivery drivers see increased vehicle maintenance costs due to tariffed auto parts. These costs are not reimbursable for most gig workers.',
     },
-    impact_story: 'Rosa\'s bakery in San Antonio imports specialty chocolate from Belgium. Tariffs increased her ingredient costs by 28%. She raised cupcake prices from $4 to $5 and lost 15% of her customers.',
+    impact_story: 'Rosa\'s bakery in San Antonio imports specialty chocolate from Belgium and vanilla from Madagascar. Tariffs have increased her ingredient costs by 28%. She raised cupcake prices from $4 to $5, and lost 15% of her customers. Meanwhile, her competitor who uses domestic ingredients gained market share. Rosa is considering switching suppliers but domestic alternatives cost 20% more than her pre-tariff imports.',
     ai_processed: true,
     related_action_ids: [],
     legal_challenges: [
-      { case_name: 'U.S. Chamber of Commerce v. USTR', court: 'U.S. Court of International Trade', status: 'pending', summary: 'Business groups challenging tariff authority.' },
+      { case_name: 'U.S. Chamber of Commerce v. USTR', court: 'U.S. Court of International Trade', status: 'pending', summary: 'Business groups challenging tariff authority arguing it exceeds the scope of IEEPA.' },
     ],
     timeline: [
       { date: '2025-04-02', label: '"Liberation Day" — tariffs announced', completed: true },
       { date: '2025-04-09', label: 'Tariffs take effect', completed: true },
       { date: '2025-07-01', label: 'China tariffs escalated to 145%', completed: true },
+      { date: '2025-10-15', label: 'Some bilateral negotiations begin', completed: true },
+      { date: '2026-03-01', label: 'Court of International Trade challenge', completed: false },
     ],
     source_url: 'https://www.whitehouse.gov/presidential-actions/',
     source_api: 'federal_register',
@@ -365,8 +628,8 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_id: 'court-harvard-funding',
     action_type: 'court_ruling',
     title: 'Court Blocks Administration\'s Freeze on Harvard Research Grants',
-    summary_raw: 'Federal judge ruled freezing $2B+ in Harvard grants was unconstitutional.',
-    summary_ai: 'A federal judge ruled that freezing and canceling over $2 billion in Harvard University research grants was unconstitutional, violating the First Amendment and APA.',
+    summary_raw: 'U.S. District Court in Boston ruled that the administration\'s actions against Harvard University violated the First Amendment and APA.',
+    summary_ai: 'A federal judge in Boston ruled that freezing and canceling over $2 billion in Harvard University research grants was unconstitutional. The court found the actions violated the First Amendment (academic freedom), Title VI, and the Administrative Procedure Act. This ruling has implications for all universities facing similar federal funding threats. The government has appealed, and the case is being watched as a test of executive power over higher education funding.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'U.S. District Court, D. Mass.',
@@ -377,22 +640,24 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     effective_date: '2025-09-03',
     publication_date: '2025-09-03',
     status: 'active',
-    status_detail: 'Ruling stands. Government has appealed to First Circuit.',
+    status_detail: 'Ruling stands. Government has appealed to First Circuit. Grants temporarily restored.',
     categories: ['education', 'government_spending'],
     affected_personas: ['student', 'healthcare_worker'],
     impact_level: 'medium',
     state_relevance: ['MA', 'CA', 'NY', 'CT', 'PA', 'IL'],
     impact_personas: {
-      student: 'This ruling provides legal precedent protecting university research grants. However, the appeal creates ongoing uncertainty.',
-      healthcare_worker: 'NIH-funded medical research at universities is protected by this ruling.',
+      student: 'If your university has faced federal funding threats, this ruling provides legal precedent for protection. Research assistantships funded by federal grants are more secure following this decision. However, the appeal creates ongoing uncertainty.',
+      healthcare_worker: 'NIH-funded medical research at universities is protected by this ruling. Ongoing clinical trials that were at risk of losing funding can continue. But the appeal means this could change.',
     },
-    impact_story: 'Dr. Chen\'s cancer research lab at Harvard had its $4.2 million NIH grant frozen overnight. Three postdocs were told to stop working. After the ruling, funding was restored.',
+    impact_story: 'Dr. Chen\'s cancer research lab at Harvard had its $4.2 million NIH grant frozen overnight. Three postdocs were told to stop working. After the court ruling, funding was restored, but the 3-month interruption set the research back by a year. Similar labs at Columbia, Stanford, and MIT watched closely.',
     ai_processed: true,
     related_action_ids: ['act-4'],
     legal_challenges: [],
     timeline: [
       { date: '2025-06-01', label: 'Administration freezes Harvard grants', completed: true },
+      { date: '2025-07-15', label: 'Harvard files lawsuit', completed: true },
       { date: '2025-09-03', label: 'Court rules in Harvard\'s favor', completed: true },
+      { date: '2025-09-15', label: 'Government appeals to First Circuit', completed: true },
       { date: '2026-05-01', label: 'First Circuit hearing expected', completed: false },
     ],
     source_url: '',
@@ -403,8 +668,8 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_id: 'eo-veterans-warrior',
     action_type: 'executive_order',
     title: 'Keeping Promises to Veterans and Establishing a National Center for Warrior Independence',
-    summary_raw: 'Executive order establishing a National Center for Warrior Independence within the VA.',
-    summary_ai: 'This executive order creates a National Center for Warrior Independence within the VA. It targets 90-day average disability claims processing (down from 150+ days) and expands telehealth access.',
+    summary_raw: 'Executive order establishing a National Center for Warrior Independence to support veteran transition and self-sufficiency.',
+    summary_ai: 'This executive order creates a National Center for Warrior Independence within the VA to help veterans transition to civilian life. It directs the VA to streamline disability claims processing (targeting 90-day average from current 150+ days), expands telehealth access to rural veterans, and creates partnerships with employers for veteran hiring. The order also directs a review of all VA programs for efficiency and consolidation.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'President',
@@ -415,21 +680,22 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     effective_date: '2025-05-09',
     publication_date: '2025-05-12',
     status: 'active',
-    status_detail: 'National Center established. Claims processing target not yet met (current avg: 120 days).',
+    status_detail: 'National Center established. Claims processing target not yet met (current avg: 120 days, down from 150).',
     categories: ['veterans', 'healthcare', 'labor'],
     affected_personas: ['veteran'],
     impact_level: 'medium',
     state_relevance: [],
     impact_personas: {
-      veteran: 'Disability claims processing is being accelerated — currently at 120 days average, down from 150+. Telehealth access is expanding for rural veterans.',
+      veteran: 'Disability claims processing is being accelerated — target is 90 days average, down from 150+. Currently at 120 days average. Telehealth access is expanding, especially for rural veterans. New employer partnerships are being established for transition support. The National Center for Warrior Independence is now operational.',
     },
-    impact_story: 'Jake, a Marine veteran in rural Arizona, waited 8 months for his disability claim. Under the new system, recent claims are being processed in 4 months.',
+    impact_story: 'Jake, a Marine veteran in rural Arizona, waited 8 months for his disability claim to be processed. Under the new streamlined system, recent claims are being processed in 4 months on average. Jake can now also access VA mental health counseling via telehealth instead of driving 90 minutes to the nearest VA facility.',
     ai_processed: true,
     related_action_ids: [],
     legal_challenges: [],
     timeline: [
       { date: '2025-05-09', label: 'Executive order signed', completed: true },
       { date: '2025-07-01', label: 'National Center established', completed: true },
+      { date: '2025-10-01', label: 'Claims processing reforms begin', completed: true },
       { date: '2026-05-09', label: 'One-year progress review', completed: false },
     ],
     source_url: 'https://www.whitehouse.gov/presidential-actions/',
@@ -440,8 +706,8 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     action_id: 'prorule-gig-worker',
     action_type: 'proposed_rule',
     title: 'Proposed Rule: Independent Contractor Classification Under Fair Labor Standards Act',
-    summary_raw: 'Proposed rule revising independent contractor classification under the FLSA.',
-    summary_ai: 'The Department of Labor proposes a new 6-factor test for classifying workers as independent contractors vs. employees. This could reclassify millions of gig workers as employees. Public comment period open through April 2026.',
+    summary_raw: 'Proposed rule from Department of Labor revising the test for determining independent contractor status under the FLSA.',
+    summary_ai: 'The Department of Labor proposes a new 6-factor "economic reality" test for classifying workers as independent contractors vs. employees. The proposed rule would make it harder for companies to classify workers as independent contractors by weighing factors like the degree of control, opportunity for profit/loss, and permanency of the relationship. This could reclassify millions of gig workers (Uber, DoorDash, Instacart drivers, freelancers) as employees, entitling them to minimum wage, overtime, and benefits. The public comment period is open through April 2026.',
     full_text_url: '',
     pdf_url: '',
     issuing_authority: 'Department of Labor',
@@ -452,16 +718,16 @@ const CURATED_ACTIONS: GovernmentAction[] = [
     effective_date: null,
     publication_date: '2026-02-15',
     status: 'proposed',
-    status_detail: 'Public comment period open through April 30, 2026.',
+    status_detail: 'Public comment period open through April 30, 2026. 45,000 comments received so far.',
     categories: ['labor', 'economy'],
     affected_personas: ['gig_worker', 'small_business'],
     impact_level: 'high',
     state_relevance: [],
     impact_personas: {
-      gig_worker: 'If finalized, you may be reclassified as an employee with minimum wage protections and benefits, but may lose scheduling flexibility.',
-      small_business: 'If you use independent contractors, the new test may require reclassifying them as employees, increasing labor costs 20-30% per worker.',
+      gig_worker: 'If finalized, you may be reclassified as an employee. This means you\'d gain minimum wage protections, overtime pay, workers\' comp, and potentially employer-provided benefits. However, you may lose scheduling flexibility. You can submit a public comment to share your views — the comment period is open through April 30, 2026.',
+      small_business: 'If you use independent contractors, the new test may require reclassifying them as employees. This could increase labor costs 20-30% per worker (taxes, benefits, workers\' comp). Review your contractor relationships now. Submit a public comment to share business impact.',
     },
-    impact_story: 'Maria drives for DoorDash and Uber in Mesa, AZ. As an employee, she\'d gain health insurance but might lose the ability to set her own hours. She\'s one of 59 million Americans in the gig economy watching this rule.',
+    impact_story: 'Maria drives for DoorDash and Uber in Mesa, AZ, earning $1,800/month on her own schedule while caring for her two kids. As an employee, she\'d gain health insurance and guaranteed minimum wage — but might lose the ability to set her own hours. She\'s one of 59 million Americans in the gig economy watching this rule.',
     ai_processed: true,
     related_action_ids: [],
     legal_challenges: [],
@@ -475,101 +741,65 @@ const CURATED_ACTIONS: GovernmentAction[] = [
   },
 ]
 
-// Build a quick-lookup map from the curated data
-const curatedMap = new Map<string, GovernmentAction>()
-for (const a of CURATED_ACTIONS) {
-  curatedMap.set(a.id, a)
-}
+// ---------------------------------------------------------------------------
+// In-memory saved actions (unchanged)
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// In-memory saved actions
-// ---------------------------------------------------------------------------
 let savedActionIds = new Set<string>()
 
-// In-memory cache
-let actionsCache: GovernmentAction[] | null = null
-let actionsCacheTs = 0
-const CACHE_TTL = 5 * 60 * 1000
+// Simple in-memory cache for live API results so detail lookups are fast
+const liveActionsCache = new Map<string, GovernmentAction>()
 
 // ---------------------------------------------------------------------------
-// DB helpers
+// Internal: map our ActionType filter to Fed Reg conditions params
 // ---------------------------------------------------------------------------
 
-function mapDbAction(row: Record<string, unknown>): GovernmentAction {
-  const id = (row.id ?? '') as string
-  // If we have rich curated data for this action, use it
-  const curated = curatedMap.get(id)
-  if (curated) return curated
-
-  // Otherwise build from DB fields
-  const agencyNames = Array.isArray(row.agency_names) ? row.agency_names as string[] : []
-  const title = (row.title ?? '') as string
-  const abstract = (row.abstract ?? '') as string
-
-  return {
-    id,
-    action_id: (row.document_number ?? '') as string,
-    action_type: mapTypeToActionType((row.type ?? '') as string),
-    title,
-    summary_raw: abstract,
-    summary_ai: abstract,
-    full_text_url: (row.federal_register_url ?? '') as string,
-    pdf_url: (row.pdf_url ?? '') as string,
-    issuing_authority: agencyNames[0] ?? 'Federal Government',
-    agencies: agencyNames,
-    document_number: (row.document_number ?? '') as string,
-    executive_order_number: null,
-    signing_date: null,
-    effective_date: (row.effective_date ?? null) as string | null,
-    publication_date: (row.publication_date ?? '') as string,
-    status: 'active',
-    status_detail: 'Published in the Federal Register.',
-    categories: [(row.category ?? 'general') as string],
-    affected_personas: ['general_public'],
-    impact_level: (row.impact_level ?? 'medium') as 'high' | 'medium' | 'low',
-    state_relevance: [],
-    impact_personas: {},
-    impact_story: abstract || `${title} — review the full text for details.`,
-    ai_processed: false,
-    related_action_ids: [],
-    legal_challenges: [],
-    timeline: [],
-    source_url: (row.federal_register_url ?? '') as string,
-    source_api: 'federal_register',
+function actionTypeToFedRegConditions(type?: ActionType | 'all'): Record<string, string> {
+  if (!type || type === 'all') {
+    return {
+      'conditions[type][]': 'PRESDOCU',
+      // We'll add multiple types via the URL manually
+    }
+  }
+  switch (type) {
+    case 'executive_order':
+    case 'proclamation':
+    case 'memorandum':
+      return { 'conditions[type][]': 'PRESDOCU' }
+    case 'final_rule':
+      return { 'conditions[type][]': 'RULE' }
+    case 'proposed_rule':
+      return { 'conditions[type][]': 'PRORULE' }
+    case 'agency_action':
+      return { 'conditions[type][]': 'NOTICE' }
+    default:
+      return {}
   }
 }
 
-function mapTypeToActionType(type: string): ActionType {
-  const t = type.toLowerCase()
-  if (t.includes('presidential') || t.includes('executive')) return 'executive_order'
-  if (t.includes('rule') && t.includes('proposed')) return 'proposed_rule'
-  if (t.includes('rule')) return 'final_rule'
-  if (t.includes('notice')) return 'agency_action'
-  return 'agency_action'
-}
-
-async function fetchAllActionsFromDb(): Promise<GovernmentAction[]> {
-  if (actionsCache && Date.now() - actionsCacheTs < CACHE_TTL) {
-    return actionsCache
+/** Build URL with multiple type conditions (since URLSearchParams merges same-name keys) */
+function buildSearchUrl(
+  params: Record<string, string>,
+  types?: string[],
+  searchTerm?: string,
+): string {
+  const url = new URL(`${FED_REG_BASE}/documents`)
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'conditions[type][]') continue // handled below
+    url.searchParams.append(key, value)
   }
-
-  const { data, error } = await insforge.database
-    .from('actions')
-    .select('*')
-    .order('publication_date', { ascending: false })
-
-  if (error || !data) {
-    console.warn('Failed to fetch actions from DB:', error)
-    return actionsCache ?? CURATED_ACTIONS
+  const docTypes = types ?? ['PRESDOCU', 'RULE', 'PRORULE', 'NOTICE']
+  for (const t of docTypes) {
+    url.searchParams.append('conditions[type][]', t)
   }
-
-  actionsCache = (data as Record<string, unknown>[]).map(mapDbAction)
-  actionsCacheTs = Date.now()
-  return actionsCache
+  if (searchTerm) {
+    url.searchParams.append('conditions[term]', searchTerm)
+  }
+  return url.toString()
 }
 
 // ---------------------------------------------------------------------------
-// Public API functions (same signatures, DB-backed)
+// Public API functions
 // ---------------------------------------------------------------------------
 
 export async function getActions(filters: {
@@ -581,11 +811,38 @@ export async function getActions(filters: {
   page?: number
 } = {}): Promise<{ actions: GovernmentAction[]; total: number; page: number; pageSize: number }> {
   setActionSource('loading')
-
   try {
-    let actions = await fetchAllActionsFromDb()
+    const page = filters.page ?? 1
+    const perPage = 10
 
+    // Determine document types based on action type filter
+    let docTypes: string[] | undefined
     if (filters.type && filters.type !== 'all') {
+      const conds = actionTypeToFedRegConditions(filters.type)
+      const t = conds['conditions[type][]']
+      if (t) docTypes = [t]
+    }
+
+    const searchUrl = buildSearchUrl(
+      { per_page: String(perPage), page: String(page), order: 'newest' },
+      docTypes,
+      filters.search,
+    )
+
+    const res = await fetch(searchUrl)
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = (await res.json()) as FedRegSearchResponse
+
+    let actions = data.results.map(mapFedRegDocument)
+
+    // Cache results for detail lookups
+    for (const a of actions) {
+      liveActionsCache.set(a.id, a)
+    }
+
+    // Client-side filtering for fields Fed Reg doesn't support server-side
+    if (filters.type && filters.type !== 'all') {
+      // For PRESDOCU sub-types, the API returns all presidential docs — filter locally
       actions = actions.filter((a) => a.action_type === filters.type)
     }
     if (filters.category) {
@@ -599,9 +856,32 @@ export async function getActions(filters: {
         (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
       )
     }
+
+    setActionSource('live')
+    return { actions, total: data.count ?? actions.length, page, pageSize: perPage }
+  } catch (err) {
+    console.warn('Federal Register API failed, using fallback data:', err)
+    setActionSource('demo')
+    // Fallback to static data
+    let filtered = [...FALLBACK_ACTIONS]
+
+    if (filters.type && filters.type !== 'all') {
+      filtered = filtered.filter((a) => a.action_type === filters.type)
+    }
+    if (filters.category) {
+      filtered = filtered.filter((a) => a.categories.includes(filters.category!))
+    }
+    if (filters.persona) {
+      filtered = filtered.filter((a) => a.affected_personas.includes(filters.persona!))
+    }
+    if (filters.state) {
+      filtered = filtered.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(filters.state!),
+      )
+    }
     if (filters.search) {
       const q = filters.search.toLowerCase()
-      actions = actions.filter(
+      filtered = filtered.filter(
         (a) =>
           a.title.toLowerCase().includes(q) ||
           a.summary_ai.toLowerCase().includes(q) ||
@@ -609,7 +889,7 @@ export async function getActions(filters: {
       )
     }
 
-    actions.sort((a, b) => {
+    filtered.sort((a, b) => {
       const dateA = a.effective_date || a.signing_date || a.publication_date
       const dateB = b.effective_date || b.signing_date || b.publication_date
       return new Date(dateB).getTime() - new Date(dateA).getTime()
@@ -618,35 +898,31 @@ export async function getActions(filters: {
     const page = filters.page ?? 1
     const pageSize = 10
     const start = (page - 1) * pageSize
-    const paged = actions.slice(start, start + pageSize)
+    const paged = filtered.slice(start, start + pageSize)
 
-    setActionSource('live')
-    return { actions: paged, total: actions.length, page, pageSize }
-  } catch (err) {
-    console.warn('DB fetch failed for actions:', err)
-    setActionSource('demo')
-    return { actions: [], total: 0, page: filters.page ?? 1, pageSize: 10 }
+    return { actions: paged, total: filtered.length, page, pageSize }
   }
 }
 
 export async function getActionDetail(actionId: string): Promise<GovernmentAction | null> {
-  // Check curated data first (has rich nested data)
-  const curated = curatedMap.get(actionId)
-  if (curated) return curated
-
-  // Check in-memory cache
-  const cached = actionsCache?.find((a) => a.id === actionId)
+  // Check cache first (populated by getActions / getActionFeed)
+  const cached = liveActionsCache.get(actionId)
   if (cached) return cached
 
-  // Fetch from DB
-  const { data, error } = await insforge.database
-    .from('actions')
-    .select('*')
-    .eq('id', actionId)
-    .limit(1)
+  // Check fallback data (for curated items with custom ids like "act-1")
+  const fallback = FALLBACK_ACTIONS.find((a) => a.id === actionId)
+  if (fallback) return fallback
 
-  if (error || !data || (data as unknown[]).length === 0) return null
-  return mapDbAction((data as Record<string, unknown>[])[0])
+  // Try live API by document_number
+  try {
+    const data = await fedRegFetch<FedRegDocument>(`/documents/${actionId}`)
+    const action = mapFedRegDocument(data)
+    liveActionsCache.set(action.id, action)
+    return action
+  } catch (err) {
+    console.warn('Federal Register detail lookup failed:', err)
+    return null
+  }
 }
 
 export async function getActionImpact(
@@ -683,9 +959,14 @@ export async function chatWithAction(
       response: `The ${action.title} primarily affects ${action.affected_personas.join(', ')} personas. ${action.summary_ai.split('.').slice(0, 2).join('.')}. Would you like to know about a specific aspect?`,
     }
   }
+  if (lowerMsg.includes('exempt') || lowerMsg.includes('exception') || lowerMsg.includes('not apply')) {
+    return {
+      response: `Good question about exemptions. ${action.summary_ai.split('.').filter((s: string) => s.toLowerCase().includes('exempt') || s.toLowerCase().includes('not')).join('.') || 'The specific exemptions depend on your situation. Could you tell me more about your circumstances?'}`,
+    }
+  }
   if (lowerMsg.includes('status') || lowerMsg.includes('when') || lowerMsg.includes('effective') || lowerMsg.includes('date')) {
     return {
-      response: `Current status: ${action.status_detail}. ${action.effective_date ? `This took effect on ${new Date(action.effective_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.` : ''} ${action.legal_challenges.length > 0 ? `There are ${action.legal_challenges.length} active legal challenge(s).` : ''}`,
+      response: `Current status: ${action.status_detail}. ${action.effective_date ? `This took effect on ${new Date(action.effective_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.` : ''} ${action.legal_challenges.length > 0 ? `There are ${action.legal_challenges.length} active legal challenge(s) that could affect its status.` : ''}`,
     }
   }
   if (lowerMsg.includes('legal') || lowerMsg.includes('court') || lowerMsg.includes('challenge') || lowerMsg.includes('lawsuit')) {
@@ -694,6 +975,11 @@ export async function chatWithAction(
     }
     const challenges = action.legal_challenges.map((c) => `${c.case_name} (${c.court}): ${c.summary}`).join('\n\n')
     return { response: `There are ${action.legal_challenges.length} legal challenge(s):\n\n${challenges}` }
+  }
+  if (lowerMsg.includes('what can i do') || lowerMsg.includes('options') || lowerMsg.includes('action')) {
+    return {
+      response: `Here are steps you can consider:\n\n1. Stay informed — track this action in CitizenOS for updates\n2. Contact your representative — share how this affects you\n3. ${action.action_type === 'proposed_rule' ? 'Submit a public comment during the comment period' : 'Follow any legal challenges that may change the status'}\n4. Consult with a relevant professional (immigration attorney, tax advisor, etc.) for your specific situation`,
+    }
   }
 
   return {
@@ -728,44 +1014,102 @@ export async function getActionFeed(options: {
   state?: string
   limit?: number
 } = {}): Promise<GovernmentAction[]> {
-  let feed = await fetchAllActionsFromDb()
-
-  if (options.personas && options.personas.length > 0) {
-    const personalized = feed.filter((a) =>
-      a.affected_personas.some((p) => options.personas!.includes(p)),
+  try {
+    const perPage = Math.min(options.limit ?? 10, 20)
+    const searchUrl = buildSearchUrl(
+      { per_page: String(perPage), page: '1', order: 'newest' },
     )
-    if (personalized.length > 0) feed = personalized
-  }
-  if (options.categories && options.categories.length > 0) {
-    const catFiltered = feed.filter((a) =>
-      a.categories.some((c) => options.categories!.includes(c)),
-    )
-    if (catFiltered.length > 0) feed = catFiltered
-  }
-  if (options.state) {
-    const stateFiltered = feed.filter(
-      (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!),
-    )
-    if (stateFiltered.length > 0) feed = stateFiltered
-  }
 
-  feed.sort((a, b) => {
-    const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
-    const wA = impactWeight[a.impact_level] ?? 1
-    const wB = impactWeight[b.impact_level] ?? 1
-    if (wA !== wB) return wB - wA
-    const dateA = a.effective_date || a.signing_date || a.publication_date
-    const dateB = b.effective_date || b.signing_date || b.publication_date
-    return new Date(dateB).getTime() - new Date(dateA).getTime()
-  })
+    const res = await fetch(searchUrl)
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = (await res.json()) as FedRegSearchResponse
 
-  return feed.slice(0, options.limit ?? 10)
+    let feed = data.results.map(mapFedRegDocument)
+
+    // Cache results
+    for (const a of feed) {
+      liveActionsCache.set(a.id, a)
+    }
+
+    // Client-side personalization filtering
+    if (options.personas && options.personas.length > 0) {
+      const personalized = feed.filter((a) =>
+        a.affected_personas.some((p) => options.personas!.includes(p)),
+      )
+      // If filtering yields nothing, keep all results rather than returning empty
+      if (personalized.length > 0) feed = personalized
+    }
+    if (options.categories && options.categories.length > 0) {
+      const catFiltered = feed.filter((a) =>
+        a.categories.some((c) => options.categories!.includes(c)),
+      )
+      if (catFiltered.length > 0) feed = catFiltered
+    }
+    if (options.state) {
+      const stateFiltered = feed.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!),
+      )
+      if (stateFiltered.length > 0) feed = stateFiltered
+    }
+
+    // Sort by impact then recency
+    feed.sort((a, b) => {
+      const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      const wA = impactWeight[a.impact_level] ?? 1
+      const wB = impactWeight[b.impact_level] ?? 1
+      if (wA !== wB) return wB - wA
+      const dateA = a.effective_date || a.signing_date || a.publication_date
+      const dateB = b.effective_date || b.signing_date || b.publication_date
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
+    })
+
+    return feed.slice(0, options.limit ?? 10)
+  } catch (err) {
+    console.warn('Federal Register feed API failed, using fallback data:', err)
+
+    let feed = [...FALLBACK_ACTIONS]
+
+    if (options.personas && options.personas.length > 0) {
+      feed = feed.filter((a) =>
+        a.affected_personas.some((p) => options.personas!.includes(p)),
+      )
+    }
+    if (options.categories && options.categories.length > 0) {
+      feed = feed.filter((a) =>
+        a.categories.some((c) => options.categories!.includes(c)),
+      )
+    }
+    if (options.state) {
+      feed = feed.filter(
+        (a) => a.state_relevance.length === 0 || a.state_relevance.includes(options.state!),
+      )
+    }
+
+    feed.sort((a, b) => {
+      const impactWeight: Record<string, number> = { high: 3, medium: 2, low: 1 }
+      const wA = impactWeight[a.impact_level] ?? 1
+      const wB = impactWeight[b.impact_level] ?? 1
+      if (wA !== wB) return wB - wA
+      const dateA = a.effective_date || a.signing_date || a.publication_date
+      const dateB = b.effective_date || b.signing_date || b.publication_date
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
+    })
+
+    return feed.slice(0, options.limit ?? 10)
+  }
 }
 
 export function getRelatedActions(actionId: string): GovernmentAction[] {
-  const action = curatedMap.get(actionId)
+  // Check live cache first
+  const cachedAction = liveActionsCache.get(actionId)
+  if (cachedAction && cachedAction.related_action_ids.length > 0) {
+    return cachedAction.related_action_ids
+      .map((id) => liveActionsCache.get(id) ?? FALLBACK_ACTIONS.find((a) => a.id === id))
+      .filter((a): a is GovernmentAction => a != null)
+  }
+
+  // Fallback
+  const action = FALLBACK_ACTIONS.find((a) => a.id === actionId)
   if (!action) return []
-  return action.related_action_ids
-    .map((id) => curatedMap.get(id))
-    .filter((a): a is GovernmentAction => a != null)
+  return FALLBACK_ACTIONS.filter((a) => action.related_action_ids.includes(a.id))
 }

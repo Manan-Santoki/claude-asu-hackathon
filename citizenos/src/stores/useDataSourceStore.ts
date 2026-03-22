@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type DataSourceStatus = 'live' | 'demo' | 'loading' | 'idle' | 'cached'
+export type DataSourceStatus = 'live' | 'demo' | 'loading' | 'idle'
 
 export type DataSourceKey =
   | 'bills'
