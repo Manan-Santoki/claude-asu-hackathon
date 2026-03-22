@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useBillStore } from '@/stores/useBillStore'
-import { PERSONAS, getPersonaById } from '@/lib/personas'
+import { PERSONAS } from '@/lib/personas'
 import {
   GraduationCap,
   Shield,
@@ -45,7 +45,7 @@ export default function PersonaSelector({ billId }: PersonaSelectorProps) {
         }
         const ids = Array.from(next)
         if (ids.length > 0) {
-          fetchImpact(billId, ids)
+          fetchImpact(billId)
         }
         return next
       })

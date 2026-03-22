@@ -28,6 +28,17 @@ export default function ImpactPanel() {
     )
   }
 
+  if (!impactResults) {
+    return (
+      <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-8 text-center">
+        <User className="mx-auto mb-2 size-5 text-muted-foreground/50" />
+        <p className="text-sm text-muted-foreground">
+          Select personas above to see how this bill affects you
+        </p>
+      </div>
+    )
+  }
+
   const entries = Object.entries(impactResults)
 
   if (entries.length === 0) {
@@ -43,7 +54,7 @@ export default function ImpactPanel() {
 
   return (
     <div className="space-y-4">
-      {entries.map(([personaId, text], index) => {
+      {entries.map(([personaId, text]: [string, unknown], index) => {
         const persona = getPersonaById(personaId)
         return (
           <Card key={personaId}>
@@ -57,7 +68,7 @@ export default function ImpactPanel() {
             </CardHeader>
             <CardContent>
               <p className="text-sm leading-relaxed text-foreground/90">
-                {text}
+                {String(text)}
               </p>
             </CardContent>
             {index < entries.length - 1 && <Separator />}

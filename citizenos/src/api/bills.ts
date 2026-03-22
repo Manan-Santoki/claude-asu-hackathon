@@ -234,38 +234,6 @@ async function fetchBillSummary(congress: number, billType: string, billNumber: 
   return ''
 }
 
-/** Fetch full text URL/content from Congress.gov text endpoint */
-async function fetchBillText(congress: number, billType: string, billNumber: number): Promise<string> {
-  try {
-    const data = await congressFetch<{ textVersions: { date?: string; type?: string; formats?: { url?: string; type?: string }[] }[] }>(
-      `/bill/${congress}/${billType}/${billNumber}/text`
-    )
-    const versions = data.textVersions ?? []
-    if (versions.length > 0) {
-      // Get the latest text version
-      const latest = versions[versions.length - 1]
-      // Try to get the plain text format
-      const txtFormat = latest.formats?.find((f) => f.type === 'Formatted Text')
-        ?? latest.formats?.find((f) => f.type === 'PDF')
-      if (txtFormat?.url) {
-        // Fetch the actual text content (plain text format)
-        try {
-          const textRes = await fetch(txtFormat.url)
-          if (textRes.ok) {
-            const raw = await textRes.text()
-            // Take first 3000 chars to avoid huge payloads
-            return raw.replace(/<[^>]*>/g, '').slice(0, 3000)
-          }
-        } catch {
-          // Can't fetch text content
-        }
-      }
-    }
-  } catch {
-    // Text not available
-  }
-  return ''
-}
 
 // ---------------------------------------------------------------------------
 // Fallback mock data
