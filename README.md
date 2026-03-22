@@ -150,14 +150,6 @@ claude-asu-hackathon/
 | `/signup` | Sign Up |
 | `/onboarding` | 4-Step Onboarding Wizard |
 
-## Team
-
-Built at the **Claude ASU Hackathon** with task distribution across three focus areas:
-
-- **Person A** — BillBreaker module (bill data pipeline, UI, notifications)
-- **Person B** — RepScore module (representative tracking & accountability)
-- **Person C** — VoteMap module (policy quiz & candidate matching)
-
 ## License
 
 This project was built as part of a hackathon. See the repository for license details.
